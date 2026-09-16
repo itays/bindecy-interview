@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react"
 import { FolderKanbanIcon } from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
@@ -10,6 +11,26 @@ import { FilterToolbar } from "./filter-toolbar"
 
 export function ProjectOverview() {
   const fileCount = countFiles(projectFiles)
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
+    () =>
+      new Set(
+        projectFiles
+          .filter((node) => node.type === "folder")
+          .map((folder) => folder.id)
+      )
+  )
+
+  const handleFolderToggle = useCallback((folderId: string) => {
+    setExpandedFolderIds((currentFolderIds) => {
+      const nextFolderIds = new Set(currentFolderIds)
+
+      if (!nextFolderIds.delete(folderId)) {
+        nextFolderIds.add(folderId)
+      }
+
+      return nextFolderIds
+    })
+  }, [])
 
   return (
     <main className="min-h-dvh bg-background">
@@ -37,7 +58,11 @@ export function ProjectOverview() {
         <FilterToolbar fileCount={fileCount} />
 
         <div className="grid min-h-0 min-w-0 gap-4 md:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]">
-          <FileTree nodes={projectFiles} />
+          <FileTree
+            nodes={projectFiles}
+            expandedFolderIds={expandedFolderIds}
+            onFolderToggle={handleFolderToggle}
+          />
           <FilePreview />
         </div>
       </div>
