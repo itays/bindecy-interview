@@ -1,16 +1,28 @@
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { FolderKanbanIcon } from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
 import { projectFiles } from "~/data/project-files"
+import type { FileFilters } from "~/types/project-node"
 
 import { FilePreview } from "./file-preview"
 import { FileTree } from "./file-tree"
-import { countFiles } from "./file-tree-utils"
+import { countFiles, filterProjectTree } from "./file-tree-utils"
 import { FilterToolbar } from "./filter-toolbar"
 
+const emptyFilters: FileFilters = {
+  query: "",
+  minSizeMb: "",
+  maxSizeMb: "",
+  categories: [],
+}
+
 export function ProjectOverview() {
-  const fileCount = countFiles(projectFiles)
+  const totalFileCount = countFiles(projectFiles)
+  const [filters, setFilters] = useState<FileFilters>(emptyFilters)
+  const [filterExpansionOverrides, setFilterExpansionOverrides] = useState<
+    Map<string, boolean>
+  >(() => new Map())
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
     () =>
       new Set(
@@ -19,18 +31,71 @@ export function ProjectOverview() {
           .map((folder) => folder.id)
       )
   )
+  const filteredTree = useMemo(
+    () => filterProjectTree(projectFiles, filters),
+    [filters]
+  )
+  const isFiltering =
+    filteredTree.hasActiveFilters && filteredTree.validation.isValid
+  const visibleExpandedFolderIds = useMemo(() => {
+    if (!isFiltering) {
+      return expandedFolderIds
+    }
 
-  const handleFolderToggle = useCallback((folderId: string) => {
-    setExpandedFolderIds((currentFolderIds) => {
-      const nextFolderIds = new Set(currentFolderIds)
+    const visibleFolderIds = new Set([
+      ...expandedFolderIds,
+      ...filteredTree.ancestorFolderIds,
+    ])
 
-      if (!nextFolderIds.delete(folderId)) {
-        nextFolderIds.add(folderId)
+    for (const [folderId, expanded] of filterExpansionOverrides) {
+      if (expanded) {
+        visibleFolderIds.add(folderId)
+      } else {
+        visibleFolderIds.delete(folderId)
+      }
+    }
+
+    return visibleFolderIds
+  }, [
+    expandedFolderIds,
+    filteredTree.ancestorFolderIds,
+    filterExpansionOverrides,
+    isFiltering,
+  ])
+
+  const handleFiltersChange = useCallback((nextFilters: FileFilters) => {
+    setFilterExpansionOverrides(new Map())
+    setFilters(nextFilters)
+  }, [])
+
+  const handleResetFilters = useCallback(() => {
+    setFilterExpansionOverrides(new Map())
+    setFilters(emptyFilters)
+  }, [])
+
+  const handleFolderToggle = useCallback(
+    (folderId: string) => {
+      if (isFiltering) {
+        setFilterExpansionOverrides((currentOverrides) => {
+          const nextOverrides = new Map(currentOverrides)
+          nextOverrides.set(folderId, !visibleExpandedFolderIds.has(folderId))
+          return nextOverrides
+        })
+        return
       }
 
-      return nextFolderIds
-    })
-  }, [])
+      setExpandedFolderIds((currentFolderIds) => {
+        const nextFolderIds = new Set(currentFolderIds)
+
+        if (!nextFolderIds.delete(folderId)) {
+          nextFolderIds.add(folderId)
+        }
+
+        return nextFolderIds
+      })
+    },
+    [isFiltering, visibleExpandedFolderIds]
+  )
 
   return (
     <main className="min-h-dvh bg-background">
@@ -55,12 +120,20 @@ export function ProjectOverview() {
           <Badge variant="outline">Creative workspace</Badge>
         </header>
 
-        <FilterToolbar fileCount={fileCount} />
+        <FilterToolbar
+          filters={filters}
+          validation={filteredTree.validation}
+          resultCount={filteredTree.fileCount}
+          totalFileCount={totalFileCount}
+          hasActiveFilters={filteredTree.hasActiveFilters}
+          onFiltersChange={handleFiltersChange}
+          onReset={handleResetFilters}
+        />
 
         <div className="grid min-h-0 min-w-0 gap-4 md:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]">
           <FileTree
-            nodes={projectFiles}
-            expandedFolderIds={expandedFolderIds}
+            nodes={filteredTree.nodes}
+            expandedFolderIds={visibleExpandedFolderIds}
             onFolderToggle={handleFolderToggle}
           />
           <FilePreview />
