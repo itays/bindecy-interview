@@ -26,7 +26,9 @@ import { TreeBranch } from "./tree-node"
 type FileTreeProps = {
   nodes: ProjectNode[]
   expandedFolderIds: ReadonlySet<string>
+  selectedFileId: string | null
   onFolderToggle: (folderId: string) => void
+  onFileSelect: (fileId: string) => void
 }
 
 function collectVisibleNodeIds(
@@ -51,7 +53,9 @@ function collectVisibleNodeIds(
 export function FileTree({
   nodes,
   expandedFolderIds,
+  selectedFileId,
   onFolderToggle,
+  onFileSelect,
 }: FileTreeProps) {
   const [activeNodeId, setActiveNodeId] = useState(() => nodes[0]?.id ?? "")
   const visibleNodeIds = useMemo(
@@ -102,8 +106,10 @@ export function FileTree({
                 level={1}
                 expandedFolderIds={expandedFolderIds}
                 activeNodeId={visibleActiveNodeId}
+                selectedFileId={selectedFileId}
                 onActiveNodeChange={setActiveNodeId}
                 onFolderToggle={onFolderToggle}
+                onFileSelect={onFileSelect}
               />
             </div>
           ) : null}

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { FolderKanbanIcon } from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
@@ -7,7 +7,11 @@ import type { FileFilters } from "~/types/project-node"
 
 import { FilePreview } from "./file-preview"
 import { FileTree } from "./file-tree"
-import { countFiles, filterProjectTree } from "./file-tree-utils"
+import {
+  countFiles,
+  filterProjectTree,
+  findFileLocation,
+} from "./file-tree-utils"
 import { FilterToolbar } from "./filter-toolbar"
 
 const emptyFilters: FileFilters = {
@@ -20,6 +24,7 @@ const emptyFilters: FileFilters = {
 export function ProjectOverview() {
   const totalFileCount = countFiles(projectFiles)
   const [filters, setFilters] = useState<FileFilters>(emptyFilters)
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [filterExpansionOverrides, setFilterExpansionOverrides] = useState<
     Map<string, boolean>
   >(() => new Map())
@@ -37,6 +42,13 @@ export function ProjectOverview() {
   )
   const isFiltering =
     filteredTree.hasActiveFilters && filteredTree.validation.isValid
+  const selectedFileLocation = useMemo(
+    () =>
+      selectedFileId && filteredTree.visibleFileIds.has(selectedFileId)
+        ? findFileLocation(projectFiles, selectedFileId)
+        : null,
+    [filteredTree.visibleFileIds, selectedFileId]
+  )
   const visibleExpandedFolderIds = useMemo(() => {
     if (!isFiltering) {
       return expandedFolderIds
@@ -62,6 +74,12 @@ export function ProjectOverview() {
     filterExpansionOverrides,
     isFiltering,
   ])
+
+  useEffect(() => {
+    if (selectedFileId && !filteredTree.visibleFileIds.has(selectedFileId)) {
+      setSelectedFileId(null)
+    }
+  }, [filteredTree.visibleFileIds, selectedFileId])
 
   const handleFiltersChange = useCallback((nextFilters: FileFilters) => {
     setFilterExpansionOverrides(new Map())
@@ -134,9 +152,11 @@ export function ProjectOverview() {
           <FileTree
             nodes={filteredTree.nodes}
             expandedFolderIds={visibleExpandedFolderIds}
+            selectedFileId={selectedFileId}
             onFolderToggle={handleFolderToggle}
+            onFileSelect={setSelectedFileId}
           />
-          <FilePreview />
+          <FilePreview location={selectedFileLocation} />
         </div>
       </div>
     </main>

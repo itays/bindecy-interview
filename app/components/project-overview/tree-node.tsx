@@ -1,35 +1,17 @@
 import type { KeyboardEvent } from "react"
 import {
-  AudioLinesIcon,
   CheckIcon,
   ChevronRightIcon,
-  FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
-  ImageIcon,
-  VideoIcon,
 } from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import type {
-  FileCategory,
-  FileNode,
-  FolderNode,
-  ProjectNode,
-} from "~/types/project-node"
+import type { FileNode, FolderNode, ProjectNode } from "~/types/project-node"
 
+import { fileCategoryDetails } from "./file-category-details"
 import { countFiles, formatFileSize } from "./file-tree-utils"
-
-const categoryDetails: Record<
-  FileCategory,
-  { label: string; icon: typeof ImageIcon }
-> = {
-  audio: { label: "Audio", icon: AudioLinesIcon },
-  video: { label: "Video", icon: VideoIcon },
-  image: { label: "Image", icon: ImageIcon },
-  doc: { label: "Document", icon: FileTextIcon },
-}
 
 type TreeNodeProps = {
   node: ProjectNode
@@ -37,8 +19,10 @@ type TreeNodeProps = {
   parentId?: string
   expandedFolderIds: ReadonlySet<string>
   activeNodeId: string
+  selectedFileId: string | null
   onActiveNodeChange: (nodeId: string) => void
   onFolderToggle: (folderId: string) => void
+  onFileSelect: (fileId: string) => void
 }
 
 type TreeBranchProps = Omit<TreeNodeProps, "node" | "parentId"> & {
@@ -142,17 +126,21 @@ function FileRow({
   level,
   parentId,
   activeNodeId,
+  selectedFileId,
   onActiveNodeChange,
   onFolderToggle,
+  onFileSelect,
 }: Pick<
   TreeNodeProps,
   | "level"
   | "parentId"
   | "activeNodeId"
+  | "selectedFileId"
   | "onActiveNodeChange"
   | "onFolderToggle"
+  | "onFileSelect"
 > & { node: FileNode }) {
-  const category = categoryDetails[node.category]
+  const category = fileCategoryDetails[node.category]
   const CategoryIcon = category.icon
 
   return (
@@ -160,12 +148,13 @@ function FileRow({
       type="button"
       role="treeitem"
       aria-level={level}
-      aria-selected="false"
+      aria-selected={selectedFileId === node.id}
       tabIndex={activeNodeId === node.id ? 0 : -1}
       data-node-id={node.id}
       data-parent-id={parentId}
       variant="ghost"
       className="group/file-row h-auto w-full min-w-0 justify-start gap-2 px-2 py-1.5 text-left whitespace-normal aria-selected:bg-accent aria-selected:text-accent-foreground aria-selected:ring-1 aria-selected:ring-ring"
+      onClick={() => onFileSelect(node.id)}
       onFocus={() => onActiveNodeChange(node.id)}
       onKeyDown={(event) =>
         handleTreeItemKeyDown(
@@ -276,8 +265,10 @@ export function TreeNode({
   parentId,
   expandedFolderIds,
   activeNodeId,
+  selectedFileId,
   onActiveNodeChange,
   onFolderToggle,
+  onFileSelect,
 }: TreeNodeProps) {
   if (node.type === "file") {
     return (
@@ -287,8 +278,10 @@ export function TreeNode({
           level={level}
           parentId={parentId}
           activeNodeId={activeNodeId}
+          selectedFileId={selectedFileId}
           onActiveNodeChange={onActiveNodeChange}
           onFolderToggle={onFolderToggle}
+          onFileSelect={onFileSelect}
         />
       </li>
     )
@@ -315,8 +308,10 @@ export function TreeNode({
           nested
           expandedFolderIds={expandedFolderIds}
           activeNodeId={activeNodeId}
+          selectedFileId={selectedFileId}
           onActiveNodeChange={onActiveNodeChange}
           onFolderToggle={onFolderToggle}
+          onFileSelect={onFileSelect}
         />
       ) : null}
     </li>
@@ -330,8 +325,10 @@ export function TreeBranch({
   nested = false,
   expandedFolderIds,
   activeNodeId,
+  selectedFileId,
   onActiveNodeChange,
   onFolderToggle,
+  onFileSelect,
 }: TreeBranchProps) {
   return (
     <ul
@@ -350,8 +347,10 @@ export function TreeBranch({
           parentId={parentId}
           expandedFolderIds={expandedFolderIds}
           activeNodeId={activeNodeId}
+          selectedFileId={selectedFileId}
           onActiveNodeChange={onActiveNodeChange}
           onFolderToggle={onFolderToggle}
+          onFileSelect={onFileSelect}
         />
       ))}
     </ul>

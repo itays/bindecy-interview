@@ -25,6 +25,11 @@ export type FilteredProjectTree = {
   validation: FileFilterValidation
 }
 
+export type FileLocation = {
+  file: FileNode
+  path: string[]
+}
+
 type ParsedSize = {
   sizeInBytes: number | null
   error: string | null
@@ -264,6 +269,33 @@ export function filterProjectTree(
     hasActiveFilters,
     validation,
   }
+}
+
+export function findFileLocation(
+  nodes: ProjectNode[],
+  fileId: string,
+  parentPath: string[] = []
+): FileLocation | null {
+  for (const node of nodes) {
+    if (node.type === "file") {
+      if (node.id === fileId) {
+        return { file: node, path: [...parentPath, node.name] }
+      }
+
+      continue
+    }
+
+    const location = findFileLocation(node.children, fileId, [
+      ...parentPath,
+      node.name,
+    ])
+
+    if (location) {
+      return location
+    }
+  }
+
+  return null
 }
 
 export function formatFileSize(sizeInBytes: number) {
