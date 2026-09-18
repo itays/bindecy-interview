@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react"
-import { SearchXIcon } from "lucide-react"
+import {
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+  SearchXIcon,
+} from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
+import { Button } from "~/components/ui/button"
 import {
   Card,
   CardAction,
@@ -26,8 +31,11 @@ import { TreeBranch } from "./tree-node"
 type FileTreeProps = {
   nodes: ProjectNode[]
   expandedFolderIds: ReadonlySet<string>
+  allFoldersExpanded: boolean
+  hasExpandableFolders: boolean
   selectedFileId: string | null
   onFolderToggle: (folderId: string) => void
+  onAllFoldersToggle: () => void
   onFileSelect: (fileId: string) => void
 }
 
@@ -53,8 +61,11 @@ function collectVisibleNodeIds(
 export function FileTree({
   nodes,
   expandedFolderIds,
+  allFoldersExpanded,
+  hasExpandableFolders,
   selectedFileId,
   onFolderToggle,
+  onAllFoldersToggle,
   onFileSelect,
 }: FileTreeProps) {
   const [activeNodeId, setActiveNodeId] = useState(() => nodes[0]?.id ?? "")
@@ -78,7 +89,21 @@ export function FileTree({
             ? "Use arrow keys to move through folders and files"
             : "Adjust or reset the filters to see project files"}
         </CardDescription>
-        <CardAction>
+        <CardAction className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={!hasExpandableFolders}
+            onClick={onAllFoldersToggle}
+          >
+            {allFoldersExpanded ? (
+              <ChevronsDownUpIcon data-icon="inline-start" />
+            ) : (
+              <ChevronsUpDownIcon data-icon="inline-start" />
+            )}
+            {allFoldersExpanded ? "Collapse all" : "Expand all"}
+          </Button>
           <Badge variant="secondary">{fileCount}</Badge>
         </CardAction>
       </CardHeader>

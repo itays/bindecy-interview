@@ -8,6 +8,7 @@ import type { FileFilters } from "~/types/project-node"
 import { FilePreview } from "./file-preview"
 import { FileTree } from "./file-tree"
 import {
+  collectExpandableFolderIds,
   countFiles,
   filterProjectTree,
   findFileLocation,
@@ -74,6 +75,15 @@ export function ProjectOverview() {
     filterExpansionOverrides,
     isFiltering,
   ])
+  const visibleExpandableFolderIds = useMemo(
+    () => collectExpandableFolderIds(filteredTree.nodes),
+    [filteredTree.nodes]
+  )
+  const areAllVisibleFoldersExpanded =
+    visibleExpandableFolderIds.size > 0 &&
+    [...visibleExpandableFolderIds].every((folderId) =>
+      visibleExpandedFolderIds.has(folderId)
+    )
 
   useEffect(() => {
     if (selectedFileId && !filteredTree.visibleFileIds.has(selectedFileId)) {
@@ -115,6 +125,27 @@ export function ProjectOverview() {
     [isFiltering, visibleExpandedFolderIds]
   )
 
+  const handleAllFoldersToggle = useCallback(() => {
+    const shouldExpand = !areAllVisibleFoldersExpanded
+
+    if (isFiltering) {
+      setFilterExpansionOverrides((currentOverrides) => {
+        const nextOverrides = new Map(currentOverrides)
+
+        for (const folderId of visibleExpandableFolderIds) {
+          nextOverrides.set(folderId, shouldExpand)
+        }
+
+        return nextOverrides
+      })
+      return
+    }
+
+    setExpandedFolderIds(
+      shouldExpand ? new Set(visibleExpandableFolderIds) : new Set()
+    )
+  }, [areAllVisibleFoldersExpanded, isFiltering, visibleExpandableFolderIds])
+
   return (
     <main className="min-h-dvh bg-background">
       <div className="mx-auto grid min-h-dvh w-full max-w-[96rem] grid-rows-[auto_auto_1fr] gap-4 p-4 sm:p-6">
@@ -152,8 +183,11 @@ export function ProjectOverview() {
           <FileTree
             nodes={filteredTree.nodes}
             expandedFolderIds={visibleExpandedFolderIds}
+            allFoldersExpanded={areAllVisibleFoldersExpanded}
+            hasExpandableFolders={visibleExpandableFolderIds.size > 0}
             selectedFileId={selectedFileId}
             onFolderToggle={handleFolderToggle}
+            onAllFoldersToggle={handleAllFoldersToggle}
             onFileSelect={setSelectedFileId}
           />
           <FilePreview location={selectedFileLocation} />

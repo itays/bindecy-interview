@@ -45,8 +45,11 @@ describe("FileTree", () => {
       <FileTree
         nodes={recursiveNodes}
         expandedFolderIds={new Set(["level-one", "level-two"])}
+        allFoldersExpanded
+        hasExpandableFolders
         selectedFileId={null}
         onFolderToggle={vi.fn()}
+        onAllFoldersToggle={vi.fn()}
         onFileSelect={vi.fn()}
       />
     )
@@ -69,8 +72,11 @@ describe("FileTree", () => {
       <FileTree
         nodes={[]}
         expandedFolderIds={new Set()}
+        allFoldersExpanded={false}
+        hasExpandableFolders={false}
         selectedFileId={null}
         onFolderToggle={vi.fn()}
+        onAllFoldersToggle={vi.fn()}
         onFileSelect={vi.fn()}
       />
     )
