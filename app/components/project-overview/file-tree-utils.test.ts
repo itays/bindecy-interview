@@ -197,6 +197,24 @@ describe("filterProjectTree", () => {
         )
       )
     ).toEqual(["audio", "hero", "thumbnail"])
+
+    const videoNode: ProjectNode = {
+      id: "video",
+      name: "launch.mp4",
+      type: "file",
+      category: "video",
+      sizeInBytes: 10 * MB,
+      previewUrl: "https://example.com/launch.mp4",
+    }
+
+    expect(
+      visibleIds(
+        filterProjectTree(
+          [...nodes, videoNode],
+          makeFilters({ categories: ["video"] })
+        )
+      )
+    ).toEqual(["video"])
   })
 
   it("still applies file constraints beneath a matching folder", () => {

@@ -22,5 +22,5 @@ export type FileFilters = {
   query: string
   minSizeMb: string
   maxSizeMb: string
-  categories: Array<"audio" | "image">
+  categories: Array<"audio" | "video" | "image">
 }

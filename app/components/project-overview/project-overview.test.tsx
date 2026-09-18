@@ -54,6 +54,37 @@ describe("ProjectOverview", () => {
     expect(launchFolder).toHaveAttribute("aria-expanded", "false")
   })
 
+  it("expands and collapses every folder with one control", async () => {
+    const user = renderOverview()
+    const expandAll = screen.getByRole("button", { name: "Expand all" })
+
+    expect(
+      screen.queryByRole("treeitem", { name: /Archive\s*1/i })
+    ).not.toBeInTheDocument()
+
+    await user.click(expandAll)
+
+    expect(
+      screen.getByRole("treeitem", { name: /Archive\s*1/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("treeitem", { name: /launch-film-final\.mp4/i })
+    ).toBeInTheDocument()
+
+    const collapseAll = screen.getByRole("button", { name: "Collapse all" })
+    await user.click(collapseAll)
+
+    expect(
+      screen.queryByRole("treeitem", { name: /brand-guidelines\.pdf/i })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("treeitem", { name: /launch-film-final\.mp4/i })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Expand all" })
+    ).toBeInTheDocument()
+  })
+
   it("auto-expands a filtered path and restores manual expansion on reset", async () => {
     const user = renderOverview()
     const nameFilter = screen.getByLabelText("Name")
@@ -143,10 +174,19 @@ describe("ProjectOverview", () => {
       screen.getByRole("treeitem", { name: /hero-dusk\.jpg/i })
     ).toBeInTheDocument()
 
+    const videoToggle = screen.getByRole("button", { name: "Video files" })
+    await user.click(videoToggle)
+
+    expect(videoToggle).toHaveAttribute("aria-pressed", "true")
+    expect(
+      screen.getByRole("treeitem", { name: /launch-film-final\.mp4/i })
+    ).toBeInTheDocument()
+
     await user.click(screen.getByRole("button", { name: "Reset filters" }))
 
     expect(audioToggle).toHaveAttribute("aria-pressed", "false")
     expect(imageToggle).toHaveAttribute("aria-pressed", "false")
+    expect(videoToggle).toHaveAttribute("aria-pressed", "false")
     expect(
       screen.getByRole("treeitem", { name: /project-brief\.pdf/i })
     ).toBeInTheDocument()

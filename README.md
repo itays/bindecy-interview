@@ -12,7 +12,7 @@ The assignment was to build a project-file browser with:
 - A two-column workspace with a recursive file tree on the left and a preview panel on the right.
 - Nested folders that can be expanded and collapsed at any depth.
 - File selection that opens the chosen asset in the preview panel.
-- Filters for file or folder name, minimum size, maximum size, audio files, and image files.
+- Filters for file or folder name, minimum size, maximum size, audio files, image files, and video files.
 - Responsive behavior that stacks the file tree above the preview on narrow screens.
 - Accessible controls and tree navigation.
 
@@ -21,13 +21,14 @@ The assignment was to build a project-file browser with:
 - Name matching is case-insensitive and ignores surrounding whitespace.
 - Size filters are entered in MB, use inclusive bounds, and may be left empty for an open-ended range.
 - Invalid or negative sizes, and a minimum greater than the maximum, produce accessible validation feedback.
-- Audio and image filters can be selected independently or together. With neither selected, all file categories are visible.
+- Audio, image, and video filters can be selected independently or together. With none selected, all file categories are visible.
 - Different filter dimensions use AND logic; selected categories use OR logic within the category filter.
 - Matching files retain their ancestor folders so their location in the tree remains clear.
 - Matching paths expand automatically while filtering, without overwriting the user's normal folder expansion state.
 - If filtering hides the selected file, the selection and preview are cleared.
 - Images, audio, video, and documents use category-specific previews with loading, error, and external-open fallbacks.
 - The tree supports keyboard navigation with Arrow keys, Home, End, Enter, and Space.
+- A single tree-header control expands or collapses every visible folder.
 
 This iteration intentionally uses local data. It does not include an API, uploads, persistence, authentication, or URL-synchronized state.
 

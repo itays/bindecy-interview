@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react"
-import { HeadphonesIcon, ImageIcon, RotateCcwIcon } from "lucide-react"
+import {
+  HeadphonesIcon,
+  ImageIcon,
+  RotateCcwIcon,
+  VideoIcon,
+} from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
@@ -39,8 +44,8 @@ type SizeField = "minSizeMb" | "maxSizeMb"
 
 const sizePattern = "(?:\\d+(?:\\.\\d*)?|\\.\\d+)"
 
-function isFilterCategory(value: string): value is "audio" | "image" {
-  return value === "audio" || value === "image"
+function isFilterCategory(value: string): value is "audio" | "video" | "image" {
+  return value === "audio" || value === "video" || value === "image"
 }
 
 export function FilterToolbar({
@@ -252,6 +257,10 @@ export function FilterToolbar({
                 <ToggleGroupItem value="image" aria-label="Image files">
                   <ImageIcon data-icon="inline-start" />
                   Image
+                </ToggleGroupItem>
+                <ToggleGroupItem value="video" aria-label="Video files">
+                  <VideoIcon data-icon="inline-start" />
+                  Video
                 </ToggleGroupItem>
               </ToggleGroup>
             </FieldSet>

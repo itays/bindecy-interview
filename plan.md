@@ -21,14 +21,14 @@ Build a single-page project overview that lets a user filter a nested project tr
 
 - Data is local fixture data for this iteration; there is no API, upload, persistence, or URL-synchronized state.
 - The canonical internal model requires `type: "file"` on files, even though the example omits it. Fixture data will use the explicit discriminant. If future API data follows the abbreviated example, normalize it before rendering rather than weakening component types.
-- File categories remain `audio | video | image | doc`. The category filter exposes only the requested `audio` and `image` choices. With neither selected, all categories remain visible; selecting one or both limits files to those categories.
+- File categories remain `audio | video | image | doc`. The category filter exposes `audio`, `image`, and `video` choices. With none selected, all categories remain visible; selecting one or more limits files to those categories.
 - Name matching is a case-insensitive substring match.
 - Minimum and maximum sizes are entered in MB for usability, converted to bytes for comparisons, and treated as inclusive bounds. Empty bounds are open-ended.
 - All active filter dimensions combine with AND logic; multiple selected categories combine with OR logic within the category dimension.
 - A folder remains in filtered results when it matches the name query or contains a matching descendant. A folder-name match keeps its descendants subject to active size/category filters. With a name-only query, a matching folder may show its complete subtree.
 - While filters are active, ancestor folders of matching files are automatically shown expanded. Clearing filters restores the user's manually expanded/collapsed state.
 - If the selected file is removed by filtering, clear the selection and return the preview to its empty state so the preview never represents a hidden tree item.
-- Image, audio, video, and document nodes are all previewable even though only image/audio category filters are initially exposed.
+- Image, audio, video, and document nodes are all previewable.
 
 ## Architectural decisions
 
@@ -61,7 +61,7 @@ type FileFilters = {
   query: string
   minSizeMb: string
   maxSizeMb: string
-  categories: Array<"audio" | "image">
+  categories: Array<"audio" | "video" | "image">
 }
 ```
 
@@ -139,7 +139,7 @@ Install and compose shadcn components instead of recreating their behavior:
 
 - Existing `Button` for reset/open actions and tree rows where appropriate.
 - `Field` and `Input` for name/min/max controls and accessible validation text.
-- `ToggleGroup` with `type="multiple"` for Audio and Image choices.
+- `ToggleGroup` with `type="multiple"` for Audio, Image, and Video choices.
 - `Card` with full header/content composition for the filter, tree, and preview surfaces.
 - `ScrollArea` for independently scrollable tree and preview bodies.
 - `Empty` for no selection, no matches, unsupported preview, and load-failure states.
@@ -155,7 +155,7 @@ Use a page-level CSS grid because the interface has both explicit rows and colum
 ```text
 Desktop / tablet
 ┌─────────────────────────────────────────────────────────────┐
-│ Filters: name | minimum size | maximum size | audio | image │
+│ Filters: name | minimum size | maximum size | audio | image | video │
 ├──────────────────────┬──────────────────────────────────────┤
 │ Project files        │ Preview                              │
 │ recursive tree       │ selected media/document + metadata   │
@@ -262,7 +262,7 @@ Expand and collapse folders at multiple levels with mouse and keyboard. Navigate
 
 ## Phase 3: Filtering across the recursive tree
 
-**Requirements covered:** filter by name, minimum size, maximum size, audio, and image; tree responds to top panel.
+**Requirements covered:** filter by name, minimum size, maximum size, audio, image, and video; tree responds to top panel.
 
 ### What to build
 
@@ -278,7 +278,7 @@ Try name-only, min-only, max-only, single-category, multi-category, and combined
 - [ ] Min/max comparisons are inclusive and correctly convert MB input to bytes.
 - [ ] Blank size fields behave as open bounds.
 - [ ] Negative, non-numeric, and min-greater-than-max input exposes an accessible validation state rather than silently producing misleading results.
-- [ ] Audio and Image can be selected independently or together; no selection means all categories.
+- [ ] Audio, Image, and Video can be selected independently or together; no selection means all categories.
 - [ ] Active dimensions combine predictably without mutating source data.
 - [ ] Every visible matching file retains its ancestor path.
 - [ ] No-results and result-count feedback is clear and accessible.
@@ -335,17 +335,17 @@ Run tests, type checking, formatting check, and production build. Exercise the p
 
 ## Test matrix
 
-| Area | Cases |
-| --- | --- |
-| Recursive rendering | empty root, empty folder, one level, multiple levels, long names |
-| Name filtering | case differences, surrounding whitespace, file match, folder match, no match |
-| Size filtering | exact boundary, min only, max only, both bounds, zero-byte file, invalid values |
-| Category filtering | none, audio, image, audio + image, doc/video visibility in default state |
-| Expansion | independent folders, nested collapse, filter auto-expansion, clear-filter restoration |
-| Selection | mouse, Enter/Space, switching files, selected file filtered out |
-| Preview | image success/failure, audio, video, document embed/fallback, unsupported URL |
-| Accessibility | labels, invalid fields, `aria-expanded`, selected state, tree keyboard navigation, focus visibility |
-| Responsive layout | wide two-column, constrained tablet, stacked mobile, panel scrolling, long URLs/names |
+| Area                | Cases                                                                                               |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| Recursive rendering | empty root, empty folder, one level, multiple levels, long names                                    |
+| Name filtering      | case differences, surrounding whitespace, file match, folder match, no match                        |
+| Size filtering      | exact boundary, min only, max only, both bounds, zero-byte file, invalid values                     |
+| Category filtering  | none, audio, image, video, combined media categories, doc visibility in default state               |
+| Expansion           | independent folders, nested collapse, filter auto-expansion, clear-filter restoration               |
+| Selection           | mouse, Enter/Space, switching files, selected file filtered out                                     |
+| Preview             | image success/failure, audio, video, document embed/fallback, unsupported URL                       |
+| Accessibility       | labels, invalid fields, `aria-expanded`, selected state, tree keyboard navigation, focus visibility |
+| Responsive layout   | wide two-column, constrained tablet, stacked mobile, panel scrolling, long URLs/names               |
 
 ## Completion checklist
 

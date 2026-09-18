@@ -231,6 +231,20 @@ export function collectFileAncestorFolderIds(
   return ancestorFolderIds
 }
 
+export function collectExpandableFolderIds(
+  nodes: ProjectNode[],
+  folderIds = new Set<string>()
+): ReadonlySet<string> {
+  for (const node of nodes) {
+    if (node.type === "folder" && node.children.length > 0) {
+      folderIds.add(node.id)
+      collectExpandableFolderIds(node.children, folderIds)
+    }
+  }
+
+  return folderIds
+}
+
 export function filterProjectTree(
   nodes: ProjectNode[],
   filters: FileFilters
