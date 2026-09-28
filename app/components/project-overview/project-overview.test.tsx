@@ -227,6 +227,33 @@ describe("ProjectOverview", () => {
     expect(screen.getByText("Filters paused")).toBeInTheDocument()
   })
 
+  it("announces committed results and allows repeating the same announcement", async () => {
+    const user = renderOverview()
+    const nameFilter = screen.getByLabelText("Name")
+    const status = screen.getByRole("status")
+
+    await user.type(nameFilter, "not-in-this-project")
+    expect(status).toHaveTextContent("Showing all 10 files.")
+
+    await user.keyboard("{Enter}")
+    expect(status).toHaveTextContent(
+      "No matching files. Showing 0 of 10 files."
+    )
+    const firstAnnouncement = status.firstElementChild
+
+    await user.keyboard("{Enter}")
+    expect(status.firstElementChild).not.toBe(firstAnnouncement)
+    expect(status).toHaveTextContent(
+      "No matching files. Showing 0 of 10 files."
+    )
+
+    await user.click(screen.getByRole("button", { name: "Reset filters" }))
+    expect(status).toHaveTextContent("Showing all 10 files.")
+
+    await user.click(screen.getByRole("button", { name: "Audio files" }))
+    expect(status).toHaveTextContent("Showing 2 of 10 files.")
+  })
+
   it("clears the selection when filtering hides the selected file", async () => {
     const user = renderOverview()
 
