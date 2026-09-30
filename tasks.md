@@ -143,7 +143,7 @@ flowchart TD
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | done |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | todo |
 | T20 | Tree row components | 4 | T16, T19 | W8 | todo |
-| T21 | Tree keyboard model | 4 | T16 | W6 | todo |
+| T21 | Tree keyboard model | 4 | T16 | W6 | done |
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
 | T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | todo |
 | T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | todo |
@@ -563,13 +563,20 @@ flowchart TD
 
 ### T21: Tree keyboard model
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T16
 - **Read first:** `app/components/project-overview/tree-node.tsx:63-122`, `state/visible-rows.ts` (`Row` type).
 - **Touch:** `app/features/file-explorer/ui/tree/tree-keyboard.ts`, `tree-keyboard.test.ts`.
 - **Change:** `resolveTreeKey(rows, activeIndex, key, isExpanded) → { type: 'move', index } | { type: 'toggle', id } | { type: 'select', id } | { type: 'load-more' | 'retry', folderId } | { type: 'delete', id } | null`. It covers Up/Down/Home/End, Right (expand, or move to the first child), Left (collapse, or move to the parent via `parentId`), Enter/Space and Delete. A pure function.
 - **Acceptance:** tests cover every key at the boundaries (first and last row), Left from a nested file to its parent, Right on an expanded folder, and Enter on a status row.
 - **E2E:** pure function; T26's keyboard flow covers it through T22's container. That flow must include Enter/Space on a folder and on a file, and Left from a nested file to its parent.
+- **Outcome:**
+  - `ui/tree/tree-keyboard.ts` exports `TreeKeyAction` and `resolveTreeKey(rows, activeIndex, key, state)`, a pure function that maps a `KeyboardEvent.key` to `move`, `toggle`, `select`, `load-more`, `retry` or `delete`, or `null` when there is nothing to do. The container that owns focus (T22) dispatches it.
+  - Signature (deviation): it takes `ExplorerState` instead of `isExpanded`. Rows alone don't give the node type, `childCount`, or whether an expanded folder with an empty listing is expanded. It reads `nodesById` and the current mode's expanded set (`expanded`, or `filterExpanded[currentQueryKey]` while filtering). Left finds the parent through the row's `folderId`.
+  - Up/Down/Home/End move without wrapping and return `null` when already there. With no active row, Down/Home go to the first row and Up/End to the last; empty rows return `null` for every key.
+  - Right expands a collapsed folder with children (an empty one is ignored, as before), or moves from an expanded folder to its first row, which may be its loading row. Left collapses an expanded folder; otherwise it searches back to the parent row, stopping at the first shallower row. Top-level rows return `null`.
+  - Enter/Space toggles a folder, selects a file, loads more on a load-more row and retries on an error row; a loading row does nothing. Delete acts only on node rows. Every key is O(1) except Left's parent search, and a node row missing from `nodesById` throws.
+  - Gates: format, typecheck and 433 unit tests (18 files, after the rebase onto T14) pass; `tree-keyboard.test.ts` has 39 tests. React Doctor reports no issues.
 
 ### T22: Virtual tree
 
