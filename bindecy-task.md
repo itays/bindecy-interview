@@ -100,3 +100,12 @@ Build a client-side React File Explorer that supports multi-level folder nesting
   }
 ]
 ```
+
+## Interviewer clarification (addendum)
+
+This section records a clarification received from the interviewer after the original brief; it is not part of the original brief.
+
+- The primary evaluation focus is a large-scale tree with many thousands of items; don't assume the whole tree is loaded at once.
+- Define a mocked data-access interface that behaves like a backend API (e.g. children of a folder, search, filtering, pagination).
+- The frontend should request only the data needed for the current view.
+- Evaluation pays attention to architecture, component boundaries, state management, rendering performance, and scalability decisions.

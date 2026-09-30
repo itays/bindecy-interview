@@ -116,12 +116,12 @@ flowchart TD
 | T01 | SPA mode + baseline gates | 0 | — | W0 | done |
 | T02 | Playwright setup + smoke test | 0 | T01 | W1 | done |
 | T03 | CI workflow | 0 | T02 | W2 | done |
-| T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | todo |
-| T05 | Domain types + API contract | 1 | T02 | W2 | todo |
+| T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | done |
+| T05 | Domain types + API contract | 1 | T02 | W2 | done |
 | T06 | Domain filters | 1 | T05 | W3 | todo |
 | T07 | Domain format + sort | 1 | T05 | W3 | todo |
-| T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | todo |
-| T09 | Task-doc addendum | 1 | T02 | W2 | todo |
+| T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | done |
+| T09 | Task-doc addendum | 1 | T02 | W2 | done |
 | T10 | Seeded generator + curated fixture | 2 | T05 | W3 | todo |
 | T11 | Mock DB core | 2 | T07, T10 | W4 | todo |
 | T12 | Mock query index | 2 | T06, T11 | W5 | todo |
@@ -222,7 +222,7 @@ flowchart TD
 
 ### T04: Install runtime deps + shadcn CRUD components
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `components.json`, `app/components/ui/` (existing components).
 - **Touch:** `package.json`, `bun.lock`, the new files under `app/components/ui/`.
@@ -230,10 +230,16 @@ flowchart TD
   - `bun add zustand @tanstack/react-virtual use-debounce` (D1, D10, D11).
   - `bunx shadcn@latest add dialog alert-dialog` plus a select component (native select if the Base UI registry offers one, otherwise `select`) for the CRUD dialogs. Review the generated files: Base UI APIs, the `~` alias, semantic tokens only.
 - **Acceptance:** all gates pass, and the new UI files format cleanly. No feature code is added in this task.
+- **Outcome:**
+  - Runtime deps: `zustand` 5.0.15, `@tanstack/react-virtual` 3.14.13, `use-debounce` 10.1.1. shadcn added no extra npm packages.
+  - Added base-nova `dialog`, `alert-dialog` and `native-select` to `app/components/ui/`. They use `@base-ui/react`, `cn` from `cn`, `~/components/ui/button` and lucide icons, the same as the existing ui files.
+  - shadcn offered to overwrite `button.tsx`; that was declined, and every existing ui file is unchanged. The CLI has no `--overwrite=false` flag, so the prompt was answered with `n`.
+  - The generated dialog overlays used the raw `bg-black/10`; both now use the semantic `bg-foreground/10`. `native-select` keeps shadcn's `bg-[Canvas] text-[CanvasText]` on `<option>`: these are CSS system colors that follow the color scheme, not palette colors.
+  - Gates: format, typecheck, 34 unit tests and build pass.
 
 ### T05: Domain types + API contract
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `plan.md` §Data-access interface, `app/types/project-node.ts`.
 - **Touch:** `app/features/file-explorer/domain/types.ts`, `app/features/file-explorer/api/file-explorer-api.ts`.
@@ -241,6 +247,12 @@ flowchart TD
   - Define `FileCategory`, `FilterCategory` (`audio | image | video`), `FileSummary`, `FolderSummary`, `NodeSummary` (with `parentId`), `NodeDetail` (with `ancestors: {id, name}[]` and `previewUrl`), `FileQuery`, `Page<T>`, `SearchHit`, `ROOT_ID`/null root convention, and `ApiError` with codes (`network`, `not-found`, `conflict`, `validation`).
   - Define the `FileExplorerApi` interface exactly as in plan.md, with a JSDoc on each method describing paging and cursor semantics.
 - **Acceptance:** typecheck passes. Types and interface only, no runtime logic except the `ApiError` class.
+- **Outcome:**
+  - `domain/types.ts`: `FileCategory` keeps the fixture values (`audio | video | image | doc`); `FilterCategory = Exclude<FileCategory, "doc">`. `FileQuery = {name, minBytes, maxBytes, categories}` with the name trimmed, byte bounds inclusive and `null` meaning open-ended. `NodeDetail = FolderDetail | FileDetail`; only `FileDetail` carries `previewUrl`, and `ancestors` run from the top-level folder down to the parent. `SearchHit = FileSummary & {ancestorIds}`.
+  - Root convention: the API uses `null` for the root; `ROOT_ID = "root"` is the key for the root listing in id-keyed maps (fixture ids are `folder-*`/`file-*`, so no collision).
+  - `api/file-explorer-api.ts`: named request/input types (`ListChildrenRequest`, `SearchRequest`, `StatsRequest`, `CreateFolderInput`, `CreateFileInput`) with the plan's shapes; JSDoc fixes the order, cursor stability, abort (`DOMException` `"AbortError"`) and which `ApiError` code each method rejects with. `search` returns hits in tree order so the first ~50 hits reveal the top of the tree (D2).
+  - `ApiError` lives in `api/` rather than `domain/`: it's part of the transport contract, and `domain/` stays error-free.
+  - Gates: format, typecheck and 34 unit tests pass.
 
 ### T06: Domain filters
 
@@ -267,7 +279,7 @@ flowchart TD
 
 ### T08: UI prep: ScrollArea `viewportRef` + category details
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `app/components/ui/scroll-area.tsx`, `app/components/project-overview/file-category-details.ts`.
 - **Touch:** `app/components/ui/scroll-area.tsx`, `app/features/file-explorer/ui/file-category-details.ts`.
@@ -275,15 +287,23 @@ flowchart TD
   - Add an optional `viewportRef?: React.Ref<HTMLDivElement>` prop to `ScrollArea` and forward it to `ScrollAreaPrimitive.Viewport`.
   - Copy `file-category-details.ts` into the feature folder, typed against the T05 `FileCategory`. The old file is deleted in T25.
 - **Acceptance:** gates pass, and existing usages behave as before (the current tests stay green).
+- **Outcome:**
+  - `ScrollArea` takes an optional `viewportRef?: React.Ref<HTMLDivElement>`, destructured so it isn't spread onto Root, and passes it as `ref` to `ScrollAreaPrimitive.Viewport`. Nothing else changed, and existing callers pass no ref.
+  - `app/features/file-explorer/ui/file-category-details.ts` is a copy of the old file that imports `FileCategory` from `domain/types`; the old file stays until T25.
+  - No dedicated test: a test that only checks prop forwarding pins wiring. The virtualizer tests in T22 cover the ref through real scrolling behavior.
+  - Gates: format, typecheck and 34 unit tests pass.
 
 ### T09: Task-doc addendum
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `bindecy-task.md`.
 - **Touch:** `bindecy-task.md`.
 - **Change:** append an "Interviewer clarification (addendum)" section containing the agreed text: primary evaluation criteria are a large-scale tree of many thousands of items; a mocked data-access interface that behaves like a backend API; request only the data needed for the current view; attention to architecture, component boundaries, state management, rendering performance and scalability decisions.
 - **Acceptance:** the original brief text is unchanged, and the addendum is clearly marked as a later clarification.
+- **Outcome:**
+  - Appended `## Interviewer clarification (addendum)` to `bindecy-task.md`: one sentence marks it as a later clarification that isn't part of the original brief, followed by four bullets (large tree with no full load, backend-like mocked data API, request only what the view needs, evaluation focus areas).
+  - The diff only adds lines at the end of the file; the original brief is unchanged.
 
 ---
 
