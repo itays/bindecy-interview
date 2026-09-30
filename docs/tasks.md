@@ -154,7 +154,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 | T30 | CRUD: delete UI | 5 | T29 | W12 | done |
 | T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | dropped |
 | T32 | README + scaling write-up | 6 | T33 | W14 | todo |
-| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | review |
+| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | done |
 
 ---
 
@@ -861,7 +861,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 
 ### T33: Handover: cleanup, Cloudflare deploy, screenshots
 
-- **Status:** review
+- **Status:** done
 - **Depends on:** T30
 - **Read first:** `.github/workflows/ci.yml`, `react-router.config.ts`, `playwright.config.ts`, the current `cloudflare/wrangler-action` and Cloudflare Pages "Direct Upload" docs.
 - **Touch:** `Dockerfile`, `.dockerignore`, `bindecy-task.md`, `plan.md`, `tasks.md`, `show-me-refactor-plan.html` (all moved into `docs/`), `README.md` (the `plan.md` link only), `.github/workflows/ci.yml`, `scripts/capture-screenshots.ts`, `docs/images/*`.
@@ -892,11 +892,12 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
   - The repo homepage points at the production URL.
   - `docs/images/` holds the 3 screenshots, and the script regenerates them.
   - `actionlint` reports no findings. Gates: format, typecheck, test, build.
-- **Outcome (so far):**
+- **Outcome:**
   - Cleanup: `Dockerfile` and `.dockerignore` are deleted, the four documents are `git mv`'d into `docs/` (their relative links still resolve), and the README links `docs/plan.md`.
   - Deploy job: `checks` uploads `build/client` as the `client-build` artifact (1-day retention) right after Build. `deploy` (`needs: checks`) runs on pushes and on same-repo PRs, downloads the artifact and runs `pages deploy build/client --project-name=file-explorer-task --branch=${{ github.head_ref || 'main' }} --commit-hash=…`, then writes `deployment-url` and the branch alias to the job summary. It uses `cloudflare/wrangler-action@v4` and `actions/download-artifact@v8`, the current majors (deviation from `@v3`: v4 only changes the default Wrangler to v4). The action runs `command` through `@actions/exec`, not a shell, so a branch name can't inject a command.
   - Screenshots: `scripts/capture-screenshots.ts <baseURL>` captures the three PNGs in light mode with reduced motion, waiting until the preview's loading status is gone and no "preview unavailable" fallback shows. Sizes: `explorer-desktop.png` 233 KB, `filter-active.png` 77 KB (name filter `interview`, `arden-interview.mp3` previewed), `mobile.png` 105 KB (the stacked layout scrolled to the tree card, `primary-mark.png` selected).
   - Checks: `actionlint` 1.7.12 reports no findings; format, typecheck, 481 unit tests (22 files) and build pass.
   - Pages project (deviation): named `file-explorer-task` instead of `bindecy-interview`, so production is `https://file-explorer-task.pages.dev`; `ci.yml` and step 2 above use that name.
   - Preview deploy: on [PR #18](https://github.com/itays/bindecy-interview/pull/18) `checks` passed in 1m19s and `deploy` in 26s, publishing `https://0cd3e1a2.file-explorer-task.pages.dev` and the branch alias `https://refactor-w13-handover.file-explorer-task.pages.dev`, both in the job summary. On the alias, `/`, `/?nodes=100000&latency=0` and `/does-not-exist` return 200 with the app shell, and Chromium at 100k nodes shows "Showing all 91,418 files." with 5 top-level rows and no page errors.
-  - Left after the merge: check the production deploy of `main`, then `gh repo edit --homepage https://file-explorer-task.pages.dev` and a new description.
+  - Production deploy: the merge commit `18359dc` on `main` passed `checks` and `deploy` ([run 36778872578](https://github.com/itays/bindecy-interview/actions/runs/36778872578)), publishing `https://1a78729d.file-explorer-task.pages.dev`. On `https://file-explorer-task.pages.dev`, `/`, `/?nodes=100000&latency=0` and `/does-not-exist` return 200 with the app shell, and Chromium at 100k nodes shows "Showing all 91,418 files." with 5 top-level rows and no page errors.
+  - Repo metadata: the homepage is `https://file-explorer-task.pages.dev`, and the description now reads "Bindecy take-home: a React file explorer for 10k–100k-node trees, with lazy loading, virtualization, filtering, previews and CRUD over a mocked backend API".
