@@ -102,6 +102,11 @@ export function folderKey(folderId: string | null): string {
   return folderId ?? ROOT_ID
 }
 
+/** Key of a listing's status row (loading, load-more or error), `status:<folderKey>`. */
+export function statusRowKey(folderId: string | null): string {
+  return `status:${folderKey(folderId)}`
+}
+
 export function isFiltering(state: ExplorerState): boolean {
   return state.appliedQuery !== null
 }
@@ -203,6 +208,14 @@ export function createExplorerStore(): ExplorerStoreApi {
         }
 
         const pageIds = page.items.map((node) => node.id)
+        // An active status row of this listing (loading, load-more or error)
+        // hands the active row to the first item it was waiting for, which
+        // takes its place in the tree. Otherwise a complete listing leaves
+        // nothing active, and a pinned load-more row keeps loading pages.
+        const takesActive =
+          pageIds.length > 0 &&
+          key === currentQueryKey(state) &&
+          state.activeId === statusRowKey(folderId)
 
         return {
           nodesById,
@@ -213,6 +226,7 @@ export function createExplorerStore(): ExplorerStoreApi {
             status: "idle",
             error: null,
           })),
+          ...(takesActive ? { activeId: pageIds[0] } : null),
         }
       }),
 
