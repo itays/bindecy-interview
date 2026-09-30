@@ -120,7 +120,7 @@ flowchart TD
 | T05 | Domain types + API contract | 1 | T02 | W2 | done |
 | T06 | Domain filters | 1 | T05 | W3 | todo |
 | T07 | Domain format + sort | 1 | T05 | W3 | todo |
-| T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | todo |
+| T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | done |
 | T09 | Task-doc addendum | 1 | T02 | W2 | done |
 | T10 | Seeded generator + curated fixture | 2 | T05 | W3 | todo |
 | T11 | Mock DB core | 2 | T07, T10 | W4 | todo |
@@ -279,7 +279,7 @@ flowchart TD
 
 ### T08: UI prep: ScrollArea `viewportRef` + category details
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `app/components/ui/scroll-area.tsx`, `app/components/project-overview/file-category-details.ts`.
 - **Touch:** `app/components/ui/scroll-area.tsx`, `app/features/file-explorer/ui/file-category-details.ts`.
@@ -287,6 +287,11 @@ flowchart TD
   - Add an optional `viewportRef?: React.Ref<HTMLDivElement>` prop to `ScrollArea` and forward it to `ScrollAreaPrimitive.Viewport`.
   - Copy `file-category-details.ts` into the feature folder, typed against the T05 `FileCategory`. The old file is deleted in T25.
 - **Acceptance:** gates pass, and existing usages behave as before (the current tests stay green).
+- **Outcome:**
+  - `ScrollArea` takes an optional `viewportRef?: React.Ref<HTMLDivElement>`, destructured so it isn't spread onto Root, and passes it as `ref` to `ScrollAreaPrimitive.Viewport`. Nothing else changed, and existing callers pass no ref.
+  - `app/features/file-explorer/ui/file-category-details.ts` is a copy of the old file that imports `FileCategory` from `domain/types`; the old file stays until T25.
+  - No dedicated test: a test that only checks prop forwarding pins wiring. The virtualizer tests in T22 cover the ref through real scrolling behavior.
+  - Gates: format, typecheck and 34 unit tests pass.
 
 ### T09: Task-doc addendum
 
