@@ -138,7 +138,7 @@ flowchart TD
 | T13 | Mock mutations | 2 | T11 | W5 | todo |
 | T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | todo |
 | T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | done |
-| T16 | Visible rows (flatten) | 3 | T15 | W5 | todo |
+| T16 | Visible rows (flatten) | 3 | T15 | W5 | done |
 | T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | todo |
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | todo |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | todo |
@@ -447,7 +447,7 @@ flowchart TD
 
 ### T16: Visible rows (flatten)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T15
 - **Read first:** `state/explorer-store.ts` (state type and selectors only).
 - **Touch:** `app/features/file-explorer/state/visible-rows.ts`, `visible-rows.test.ts`.
@@ -456,6 +456,13 @@ flowchart TD
   - It walks the root listing for the current `queryKey`. An expanded folder with a listing recurses; one without a listing gets a `loading` row; an error gets an `error` row; a `nextCursor` adds a trailing `load-more` row.
   - Export `ROW_HEIGHT = { folder: 34, file: 50, status: 34 }` and `rowHeight(row, state)`.
 - **Acceptance:** tests cover collapsed and expanded nesting, the status row for each state, `posinset`/`setsize` using `total`, filtered vs browse `queryKey`, and a stable key per row. The work is O(visible) (no traversal of collapsed subtrees; checked with a spy or a big collapsed fixture).
+- **Outcome:**
+  - `flattenVisibleRows(state)` is a pure walk from the root listing of `currentQueryKey(state)`. It returns `Row = NodeRow | LoadingRow | LoadMoreRow | ErrorRow`, a union on `kind`. Every row has `key`, `folderId` (`null` = top level) and `depth` (0 = top level, so `aria-level = depth + 1`). Node rows add `id`, a 1-based `posinset` and `setsize = listing.total`.
+  - Expansion comes from `expanded` in browse mode and from `filterExpanded[currentKey]` while filtering. A listing has at most one trailing status row at child depth: `loading` (no listing, or the first page is in flight), `error` (with `message`, after the loaded ids; it wins over a cursor, and retry resumes from the kept `nextCursor`), or `load-more` (with `loaded`/`total`) while `nextCursor !== null`. An idle, complete, empty listing has no row.
+  - Keys: a node row uses the node id. A status row uses one slot key per listing, `status:<folderKey>`, so the key survives loading → error → retry. Node ids must never contain `:`.
+  - The cost is O(visible rows): it reads only the listings of visible expanded folders, with one `nodesById.get` and at most one expanded-set lookup per node row. It never reads `matchCount`. A listed id without a `nodesById` entry throws a plain `Error`. `ROW_HEIGHT` and `rowHeight(row, state)` give node heights by type, and 34 px for status rows.
+  - For later tasks: the function returns a new array on each call, so T19 memoizes it on `listings`, `expanded`, `filterExpanded`, `appliedQuery` and `nodesById`. The UI gets an error row's folder name from `nodesById.get(row.folderId)`. `LoadMoreRow` has no status, so T20/T22 call `loader.loadMore` whenever the row is in range and rely on the loader's dedupe.
+  - Gates: format, typecheck and 199 unit tests (12 files) pass; `visible-rows.test.ts` has 25 tests. React Doctor reports no issues.
 
 ### T17: Loader (dedupe, abort, paging, reveal)
 
