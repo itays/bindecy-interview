@@ -69,7 +69,10 @@ export function TreePanel({ actions }: TreePanelProps) {
           )}
         </CardAction>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 p-0">
+      {/* Size containment keeps the rows out of the card's content height:
+          otherwise the page grid's auto-sized row grows with the tree, the
+          viewport never scrolls and every loaded row renders. */}
+      <CardContent className="min-h-0 flex-1 p-0 contain-size">
         {isEmpty ? (
           <Empty className="min-h-72">
             <EmptyHeader>

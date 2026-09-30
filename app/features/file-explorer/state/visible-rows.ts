@@ -1,6 +1,11 @@
 import type { NodeSummary } from "~/features/file-explorer/domain/types"
 
-import { currentQueryKey, folderKey, isFiltering } from "./explorer-store"
+import {
+  currentQueryKey,
+  folderKey,
+  isFiltering,
+  statusRowKey,
+} from "./explorer-store"
 import type { ExplorerState, Listing } from "./explorer-store"
 
 type RowBase = {
@@ -72,7 +77,7 @@ function statusRow(
   folderId: string | null,
   depth: number
 ): StatusRow | null {
-  const base = { key: `status:${folderKey(folderId)}`, folderId, depth }
+  const base = { key: statusRowKey(folderId), folderId, depth }
 
   if (!listing || (listing.status === "loading" && listing.ids.length === 0)) {
     return { ...base, kind: "loading" }

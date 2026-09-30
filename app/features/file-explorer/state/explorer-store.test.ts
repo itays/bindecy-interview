@@ -140,6 +140,71 @@ describe("receivePage", () => {
   })
 })
 
+describe("receivePage with an active status row", () => {
+  it("activates the first item of a first page that completes the listing", () => {
+    const store = createExplorerStore()
+    const { receivePage, setActive } = store.getState()
+    setActive("status:f")
+
+    receivePage(BROWSE_QUERY_KEY, "f", page([file("1", "f"), file("2", "f")]), {
+      append: false,
+    })
+
+    expect(store.getState().activeId).toBe("1")
+  })
+
+  it("activates the first appended item when the load-more row is active", () => {
+    const store = createExplorerStore()
+    const { receivePage, setActive } = store.getState()
+    receivePage(BROWSE_QUERY_KEY, "f", page([file("1", "f")], "c1", 3), {
+      append: false,
+    })
+    setActive("status:f")
+
+    receivePage(BROWSE_QUERY_KEY, "f", page([file("2", "f")], "c2", 3), {
+      append: true,
+    })
+
+    expect(store.getState().activeId).toBe("2")
+  })
+
+  it("activates the first top-level item when the root status row is active", () => {
+    const store = createExplorerStore()
+    const { receivePage, setActive } = store.getState()
+    setActive(`status:${ROOT_ID}`)
+
+    receivePage(BROWSE_QUERY_KEY, null, page([folder("a", null)]), {
+      append: false,
+    })
+
+    expect(store.getState().activeId).toBe("a")
+  })
+
+  it("keeps the active row when another listing's page arrives", () => {
+    const store = createExplorerStore()
+    const { receivePage, setActive } = store.getState()
+    setActive("status:f")
+
+    receivePage(BROWSE_QUERY_KEY, "g", page([file("1", "g")]), {
+      append: false,
+    })
+
+    expect(store.getState().activeId).toBe("status:f")
+  })
+
+  it("keeps the active row when the page belongs to a query that isn't applied", () => {
+    const store = createExplorerStore()
+    const { receivePage, setActive } = store.getState()
+    setActive("status:f")
+
+    receivePage(queryKey(photosQuery), "f", page([file("1", "f")]), {
+      append: false,
+    })
+
+    expect(store.getState().activeId).toBe("status:f")
+  })
+})
+
 describe("listing status", () => {
   it("keeps loaded ids and cursor when a later page fails", () => {
     const store = createExplorerStore()
