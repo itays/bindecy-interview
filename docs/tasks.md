@@ -153,7 +153,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 | T29 | CRUD: create UI | 5 | T25 | W11 | done |
 | T30 | CRUD: delete UI | 5 | T29 | W12 | done |
 | T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | dropped |
-| T32 | README + scaling write-up | 6 | T33 | W14 | todo |
+| T32 | README + scaling write-up | 6 | T33 | W14 | review |
 | T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | done |
 
 ---
@@ -827,7 +827,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 
 ### T32: README + scaling write-up
 
-- **Status:** todo
+- **Status:** review
 - **Depends on:** T33
 - **Read first:** `docs/bindecy-task.md`, `docs/plan.md` (§Decision log, §Architecture, §Data-access interface), `api/mock/mock-config.ts`, `package.json` scripts.
 - **Touch:** `README.md`, `docs/plan.md` (tick the completion checklist).
@@ -858,6 +858,14 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
   - The Mermaid diagrams and images render on GitHub (check the PR's rich diff).
   - The README is at most ~200 lines.
   - The plan's checklist is ticked.
+- **Outcome:**
+  - `README.md` is rewritten with the 13 sections in order. It's 244 lines (deviation: over the ~200 target, agreed with the user); the three sequence diagrams, the `FileExplorerApi` interface and nothing else sit in `<details>`. The Expand all line and the "no API" wording are gone.
+  - The screenshots share one three-column table with a caption header per image. The architecture diagram and folder tree are a shortened copy of `plan.md`'s; the D1 bullets and the API block summarize it rather than repeat it, and link to the JSDoc.
+  - Facts checked against the code: the mock config defaults and ranges (`mock-config.ts`), page size 100, reveal limit 50, overscan 10, the 250 ms debounce, which folder New folder targets (T29), the trash icon on Delete, the E2E bound (T26) and the 100k build and scan times (T11, T12). Every relative link resolves.
+  - The four preset URLs return 200 on `https://file-explorer-task.pages.dev`, and the CI badge URL resolves.
+  - `docs/plan.md`: every checklist item is ticked except "every task is `done`" (it waits for this task) and the `v1.0-submission` tag (it's created after merge).
+  - The README isn't Prettier-formatted, like the other docs: `format:check` covers only `*.ts`/`*.tsx`.
+  - Gates: format, typecheck, 481 unit tests (22 files), build and `test:e2e` (23 passed, port 5232). Still open: the GitHub rich-diff check of the Mermaid diagrams and images on the PR, then the tag, the production deploy check and the reviewer message.
 
 ### T33: Handover: cleanup, Cloudflare deploy, screenshots
 
