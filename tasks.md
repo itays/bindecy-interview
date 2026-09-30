@@ -135,7 +135,7 @@ flowchart TD
 | T10 | Seeded generator + curated fixture | 2 | T05 | W3 | done |
 | T11 | Mock DB core | 2 | T07, T10 | W4 | done |
 | T12 | Mock query index | 2 | T06, T11 | W5 | todo |
-| T13 | Mock mutations | 2 | T11 | W5 | todo |
+| T13 | Mock mutations | 2 | T11 | W5 | done |
 | T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | todo |
 | T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | done |
 | T16 | Visible rows (flatten) | 3 | T15 | W5 | done |
@@ -395,7 +395,7 @@ flowchart TD
 
 ### T13: Mock mutations
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T11
 - **Read first:** `api/mock/mock-db.ts`, `domain/sort.ts`.
 - **Touch:** `app/features/file-explorer/api/mock/mock-mutations.ts`, `mock-mutations.test.ts`.
@@ -404,6 +404,13 @@ flowchart TD
   - `deleteNode` removes the subtree, updates the ancestors and returns `deletedIds`.
   - Each operation emits a mutation event.
 - **Acceptance:** tests cover sorted insertion, aggregates after create and delete, subtree deletion ids, the conflict and validation errors, and one emitted event per mutation.
+- **Outcome:**
+  - `mock-mutations.ts` exports `createMockMutations(db)`, with synchronous `createFolder`, `createFile` and `deleteNode` over `db.internal`. Each operation runs all its checks before the first write, so a thrown `ApiError` changes nothing, emits nothing and uses no id. A success emits exactly one `MockMutationEvent`, after the index is consistent.
+  - Create trims the name. It throws `validation` for a blank name, a file parent, or a size that isn't a non-negative safe integer (0 is allowed). It throws `not-found` for an unknown parent or the literal `ROOT_ID` (the top level is `null`), and `conflict` when a sibling folder or file has the same lowercased name. The conflict check is one binary search per rank plus a scan of the names that collate equal. New ids are `folder-new-N` / `file-new-N`: the counters never go back, skip taken ids, never reuse a deleted id and never contain `:`.
+  - Create costs O(depth + siblings): `upperBound` gives the slot and a splice inserts the id. A new folder gets an empty `childIds` entry and a `fileCounts` of 0; a new file adds 1 to every ancestor and to `ROOT_ID`. It returns `toSummary(record)` (no `previewUrl`; `getNode` has it).
+  - `deleteNode` costs O(subtree + depth + siblings). An iterative DFS collects `deletedIds`: the node first, then its descendants in pre-order. The node leaves its parent at `upperBound(key) - 1`, not through `indexOf`. The subtree's file count comes off every ancestor and `ROOT_ID`, and all four index maps drop each deleted id. It throws `validation` for `ROOT_ID` and `not-found` for an unknown id. The event and the return value share one `deletedIds` array, so listeners must not change it.
+  - For T14: wrap the sync calls in promises and reject with the same `ApiError`. `onMutate` listeners (the T12 cache clear) run synchronously inside the mutation. A cursor taken before a create or delete still pages over the survivors without gaps or duplicates (tested).
+  - Gates: format, typecheck and 236 unit tests (13 files, after the rebase onto T16) pass; `mock-mutations.test.ts` has 37 tests. React Doctor reports no issues.
 
 ### T14: Mock API adapter + URL config
 
