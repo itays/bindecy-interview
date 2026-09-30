@@ -115,7 +115,7 @@ flowchart TD
 | --- | --- | --- | --- | --- | --- |
 | T01 | SPA mode + baseline gates | 0 | — | W0 | done |
 | T02 | Playwright setup + smoke test | 0 | T01 | W1 | done |
-| T03 | CI workflow | 0 | T02 | W2 | review |
+| T03 | CI workflow | 0 | T02 | W2 | done |
 | T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | todo |
 | T05 | Domain types + API contract | 1 | T02 | W2 | todo |
 | T06 | Domain filters | 1 | T05 | W3 | todo |
@@ -201,7 +201,7 @@ flowchart TD
 
 ### T03: CI workflow
 
-- **Status:** review. Local checks pass; waiting on the first GitHub run.
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `.github/workflows/react-doctor.yml`, `package.json` scripts, the current `oven-sh/setup-bun` and `actions/upload-artifact` docs.
 - **Touch:** `.github/workflows/ci.yml`.
@@ -214,7 +214,7 @@ flowchart TD
   - `.github/workflows/ci.yml` pins `actions/checkout@v7`, `oven-sh/setup-bun@v2` (Bun `1.4.0`, matching the local lockfile format) and `actions/upload-artifact@v7`, the latest releases per `gh api`.
   - `actionlint` 1.7.12: no findings.
   - The full step sequence ran locally with `CI=1` (frozen install, format, typecheck, 34 unit tests, build, smoke test with `reuseExistingServer: false`): all pass.
-  - **Open:** the workflow triggers on `pull_request` and on pushes to `main`, so the first real run needs `refactor/lazy-explorer` pushed and a PR opened. Move T03 to `done` once that run is green.
+  - First GitHub run on PR #4 (commit `085fcf4`): the `checks` job passed in 53 s ([run 36713559827](https://github.com/itays/bindecy-interview/actions/runs/36713559827/job/109880880262)). React Doctor also passed (100/100).
 
 ---
 
