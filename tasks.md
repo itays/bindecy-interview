@@ -116,7 +116,7 @@ flowchart TD
 | T01 | SPA mode + baseline gates | 0 | — | W0 | done |
 | T02 | Playwright setup + smoke test | 0 | T01 | W1 | done |
 | T03 | CI workflow | 0 | T02 | W2 | done |
-| T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | todo |
+| T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | done |
 | T05 | Domain types + API contract | 1 | T02 | W2 | done |
 | T06 | Domain filters | 1 | T05 | W3 | todo |
 | T07 | Domain format + sort | 1 | T05 | W3 | todo |
@@ -222,7 +222,7 @@ flowchart TD
 
 ### T04: Install runtime deps + shadcn CRUD components
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `components.json`, `app/components/ui/` (existing components).
 - **Touch:** `package.json`, `bun.lock`, the new files under `app/components/ui/`.
@@ -230,6 +230,12 @@ flowchart TD
   - `bun add zustand @tanstack/react-virtual use-debounce` (D1, D10, D11).
   - `bunx shadcn@latest add dialog alert-dialog` plus a select component (native select if the Base UI registry offers one, otherwise `select`) for the CRUD dialogs. Review the generated files: Base UI APIs, the `~` alias, semantic tokens only.
 - **Acceptance:** all gates pass, and the new UI files format cleanly. No feature code is added in this task.
+- **Outcome:**
+  - Runtime deps: `zustand` 5.0.15, `@tanstack/react-virtual` 3.14.13, `use-debounce` 10.1.1. shadcn added no extra npm packages.
+  - Added base-nova `dialog`, `alert-dialog` and `native-select` to `app/components/ui/`. They use `@base-ui/react`, `cn` from `cn`, `~/components/ui/button` and lucide icons, the same as the existing ui files.
+  - shadcn offered to overwrite `button.tsx`; that was declined, and every existing ui file is unchanged. The CLI has no `--overwrite=false` flag, so the prompt was answered with `n`.
+  - The generated dialog overlays used the raw `bg-black/10`; both now use the semantic `bg-foreground/10`. `native-select` keeps shadcn's `bg-[Canvas] text-[CanvasText]` on `<option>`: these are CSS system colors that follow the color scheme, not palette colors.
+  - Gates: format, typecheck, 34 unit tests and build pass.
 
 ### T05: Domain types + API contract
 
