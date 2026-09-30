@@ -140,7 +140,7 @@ flowchart TD
 | T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | done |
 | T16 | Visible rows (flatten) | 3 | T15 | W5 | done |
 | T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | done |
-| T18 | State mutations (CRUD) | 3 | T15 | W5 | todo |
+| T18 | State mutations (CRUD) | 3 | T15 | W5 | done |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | todo |
 | T20 | Tree row components | 4 | T16, T19 | W8 | todo |
 | T21 | Tree keyboard model | 4 | T16 | W6 | todo |
@@ -427,6 +427,7 @@ flowchart TD
 - **Change:**
   - `createMockFileExplorerApi(config)` implements `FileExplorerApi` on top of the DB, the query index and the mutations.
   - Latency uses jitter (±50%) with a seeded RNG, and `latency: 0` resolves on a microtask.
+  - Reads run against the DB after the delay, not when the call starts. So a response reflects every mutation that finished while it was in flight; T18 relies on this for a first page that is still loading during a create.
   - An `AbortSignal` rejects with a `DOMException('AbortError')`, both before and during the delay.
   - `failRate` rejects reads with `ApiError('network')` at random (seeded). `failFirst=N` rejects the first N `listChildren` calls, then succeeds.
   - `parseMockConfig(searchParams)` reads `seed`, `nodes`, `latency`, `failRate` and `failFirst`, with defaults 1 / 10000 / 250 / 0 / 0, clamped to sane ranges.
@@ -500,7 +501,7 @@ flowchart TD
 
 ### T18: State mutations (CRUD)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T15
 - **Read first:** `plan.md` §State management (Mutations), `state/explorer-store.ts`, `domain/sort.ts`.
 - **Touch:** `app/features/file-explorer/state/mutations.ts`, `mutations.test.ts`.
@@ -513,6 +514,13 @@ flowchart TD
   - `deleteNode(id)`: after the API call, remove the `deletedIds` from `nodesById` and the listings, fix the counts, clear the selection, active row or expanded entries inside the subtree, and drop the filtered listings.
   - API errors are rethrown to the caller (for the dialogs to show).
 - **Acceptance:** tests cover insertion order, insertion beyond the loaded page, count propagation, delete cleanup of selection and expanded state, filtered listings being dropped, and the error passing through with no state change.
+- **Outcome:**
+  - `createMutations(api, store)` returns `createFolder`, `createFile` and `deleteNode`. Each command awaits the API first. A rejection reaches the caller as the same error instance, and the store state stays the same object. A success is one `store.setState(updater)` with no new store actions; only what changed gets new references.
+  - Create finds the node's position in the parent's loaded browse listing by binary search (O(log n) `compareSortKeys` calls). It inserts when the position is inside the loaded prefix or the listing is complete; past the prefix with more pages pending, it only adds 1 to `total`. It skips a missing listing, a first page still in flight, and a node that a later page already listed. It adds 1 to the parent's `childCount` and, for a file, 1 to `fileCount` on the parent and every loaded ancestor (O(depth)). It expands the parent in the current mode's set and makes the node active (and selected for a file). The node's `parentId` comes from the API response.
+  - Delete removes `deletedIds` from `nodesById`, removes the node from its parent's browse listing and deletes the browse listings of deleted folders. `total` drops by 1 only when the listing counted the node (listed, or past the prefix with pages pending). It subtracts 1 from the parent's `childCount` and the node's files from the parent and every ancestor, prunes `expanded` and every `filterExpanded` set, and clears `selectedId`/`activeId` inside the subtree. An unloaded node has no known parent, so only the entries keyed by `deletedIds` are cleaned. The cost is O(deleted + loaded siblings + depth) plus the usual shallow copies.
+  - Create and delete both drop every filtered listing and keep `appliedQuery` and `filterExpanded`. `matchCount` is never changed.
+  - For later tasks: `stats` is unchanged, so T19 calls `loader.loadStats()` after each create or delete. After a delete, `activeId` is `null` when it was inside the subtree, so the UI (T30) picks the next or previous row before the call and sets it afterwards. While filtering, a new node that doesn't match is active but not visible; the UI must allow that.
+  - Gates: format, typecheck and 333 unit tests (16 files, after the rebase onto T16, T13, T12 and T17) pass; `mutations.test.ts` has 28 tests. React Doctor reports no issues.
 
 ### T19: Explorer provider + hooks
 
@@ -521,7 +529,7 @@ flowchart TD
 - **Read first:** exports of `mock-file-explorer-api.ts`, `mock-config.ts`, `explorer-store.ts`, `loader.ts`, `mutations.ts`.
 - **Touch:** `app/features/file-explorer/state/explorer-provider.tsx`, `explorer-provider.test.tsx`, `app/test/setup.ts` (element-size mocks for the virtualizer).
 - **Change:**
-  - `<ExplorerProvider api?>` creates the api (defaulting to the mock built from `window.location.search`), the store, the loader and the mutations once, and triggers `ensureChildren(ROOT)` and `loadStats()` on mount.
+  - `<ExplorerProvider api?>` creates the api (defaulting to the mock built from `window.location.search`), the store, the loader and the mutations once. It triggers `ensureChildren(ROOT)` and `loadStats()` on mount, calls `loader.loadStats()` after each successful create or delete, and calls `loader.dispose()` on unmount.
   - Hooks: `useExplorer(selector)` (with shallow equality), `useLoader()`, `useMutations()`, `useApi()`.
   - `renderWithExplorer(ui, { api })` is a test helper using a zero-latency mock.
   - `setup.ts` mocks `offsetHeight`/`getBoundingClientRect` (and `ResizeObserver` if needed) so `@tanstack/react-virtual` renders rows in jsdom.
