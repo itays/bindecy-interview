@@ -32,6 +32,18 @@ export default function App() {
   return <Outlet />
 }
 
+// SPA mode pre-renders this into build/client/index.html; it shows until the
+// client bundle has loaded and the route renders.
+export function HydrateFallback() {
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-background">
+      <p role="status" className="text-sm text-muted-foreground">
+        Loading project files…
+      </p>
+    </main>
+  )
+}
+
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   let message = "Oops!"
   let details = "An unexpected error occurred."
