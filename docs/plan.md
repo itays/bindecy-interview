@@ -262,10 +262,10 @@ The detailed breakdown with dependencies, parallel waves and statuses lives in [
 
 ## Completion checklist
 
-- [ ] Every task in `tasks.md` is `done` (T31 was dropped).
+- [x] Every task in `tasks.md` is `done` (T31 was dropped).
 - [x] `bun run format:check`, `bun run typecheck`, `bun run test`, `bun run build` and `bun run test:e2e` pass locally, and CI is green.
 - [x] The DOM holds at most ~100 `treeitem` rows in the 5k folder (asserted by `e2e/tree.e2e.ts`), and the README explains the performance approaches.
 - [x] No old `app/components/project-overview`, `app/data`, or `app/types` code remains.
 - [x] README documents the architecture, state approach, API contract and scaling strategy.
 - [x] The app is live on Cloudflare Pages, deployed from `main` after CI passes, and the README links to it.
-- [ ] `main` is tagged `v1.0-submission`.
+- [x] `main` is tagged `v1.0-submission` (on the merge commit of the W14 status PR).

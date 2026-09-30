@@ -153,7 +153,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 | T29 | CRUD: create UI | 5 | T25 | W11 | done |
 | T30 | CRUD: delete UI | 5 | T29 | W12 | done |
 | T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | dropped |
-| T32 | README + scaling write-up | 6 | T33 | W14 | review |
+| T32 | README + scaling write-up | 6 | T33 | W14 | done |
 | T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | done |
 
 ---
@@ -827,7 +827,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 
 ### T32: README + scaling write-up
 
-- **Status:** review
+- **Status:** done
 - **Depends on:** T33
 - **Read first:** `docs/bindecy-task.md`, `docs/plan.md` (§Decision log, §Architecture, §Data-access interface), `api/mock/mock-config.ts`, `package.json` scripts.
 - **Touch:** `README.md`, `docs/plan.md` (tick the completion checklist).
@@ -865,7 +865,9 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
   - The four preset URLs return 200 on `https://file-explorer-task.pages.dev`, and the CI badge URL resolves.
   - `docs/plan.md`: every checklist item is ticked except "every task is `done`" (it waits for this task) and the `v1.0-submission` tag (it's created after merge).
   - The README isn't Prettier-formatted, like the other docs: `format:check` covers only `*.ts`/`*.tsx`.
-  - Gates: format, typecheck, 481 unit tests (22 files), build and `test:e2e` (23 passed, port 5232). Still open: the GitHub rich-diff check of the Mermaid diagrams and images on the PR, then the tag, the production deploy check and the reviewer message.
+  - Gates: format, typecheck, 481 unit tests (22 files), build and `test:e2e` (23 passed, port 5232).
+  - Merged in [PR #20](https://github.com/itays/bindecy-interview/pull/20) (`36b5e29`); CI passed on the PR (`checks` 1m09s, preview `deploy` 21s). On `main`, the first attempt of [run 36780982576](https://github.com/itays/bindecy-interview/actions/runs/36780982576) hung in "Install Playwright Chromium" for 9 minutes; it was cancelled, and the rerun passed `checks` and `deploy`. On `https://file-explorer-task.pages.dev`, `/`, `/?nodes=100000&latency=0` and `/does-not-exist` return 200.
+  - `v1.0-submission` tags the merge commit of the W14 status PR, so the tagged tree has every task `done`.
 
 ### T33: Handover: cleanup, Cloudflare deploy, screenshots
 
