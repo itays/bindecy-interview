@@ -142,11 +142,11 @@ flowchart TD
 | T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | done |
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | done |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | done |
-| T20 | Tree row components | 4 | T16, T19 | W8 | todo |
+| T20 | Tree row components | 4 | T16, T19 | W8 | done |
 | T21 | Tree keyboard model | 4 | T16 | W6 | done |
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
-| T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | todo |
-| T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | todo |
+| T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | done |
+| T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | done |
 | T25 | Page cutover + delete old code | 5 | T22, T23, T24 | W10 | todo |
 | T26 | E2E: tree | 5 | T25 | W11 | todo |
 | T27 | E2E: filters + selection clearing | 5 | T25 | W11 | todo |
@@ -558,7 +558,7 @@ flowchart TD
 
 ### T20: Tree row components
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T16, T19
 - **Read first:** `app/components/project-overview/tree-node.tsx:124-260` (current row markup and styles), `state/visible-rows.ts`, `state/explorer-provider.tsx` (hooks), `ui/file-category-details.ts`.
 - **Touch:** `app/features/file-explorer/ui/tree/tree-row.tsx`, `tree-row.test.tsx`.
@@ -570,6 +570,20 @@ flowchart TD
   - Each row has `id="tree-row-{key}"`, `role="treeitem"` and the aria-level, posinset, setsize, expanded and selected attributes. Rows are not focusable; the container owns focus.
 - **Acceptance:** component tests cover the accessible name and state for folder and file rows, selected and expanded states exposed through ARIA (not classes), the load-more row requesting the next page on mount, and Retry calling `loader.retry`.
 - **E2E:** not reachable before T25. T26 must cover folder and file rows (accessible name, `aria-expanded`, `aria-selected`), the "Loading…" row, the "Loading more… N of M" row, and the error row with Retry.
+- **Outcome:**
+  - `ui/tree/tree-row.tsx` exports `TreeRow` and `TreeRowProps`; `ui/tree/tree-row-id.ts` exports `treeRowId(key)` (`tree-row-<key>`, for T22's `aria-activedescendant`), kept out of the component file for Fast Refresh. Props: `row`, plus optional `style` and `className` (positioning from the virtualizer; the row sets its own `height` from `ROW_HEIGHT` and ignores any passed `height`) and `onActivate(row)`, called on click. T22 renders `<TreeRow key={row.key} row={row} style={…} onActivate={…} />`; setting the row active and toggling or selecting stays in T22.
+  - `TreeRow` is `memo`'d with a comparator that compares `row` and `style` shallowly (`flattenVisibleRows` builds new row objects on every run and the virtualizer a new `style` per render) and `className`/`onActivate` by identity, so T22 must keep `onActivate` stable. A new prop must be added to the comparator.
+  - Node rows keep the old visual design (chevron, folder/open-folder icon, category icon and badge, `formatFileSize` line, check icon when selected, the `aria-selected`/`aria-expanded` backgrounds). Each row reads its node plus `isExpanded`, `isSelected`, `isActive` and `isFiltering` with one `useExplorer` selector of values, so it re-renders only when its own state changes; expansion comes from `expanded`, or `filterExpanded[currentQueryKey]` while filtering (as in T21). A node missing from `nodesById` throws, like T16 and T21. Status rows subscribe only to `isActive`.
+  - Activity: a row is active when `activeId === row.key` (a node row's key is its id; a status row's is its slot key `status:<folderKey>`). The active row shows an inset `outline-ring` outline only while the tree container is `:focus-visible` (`group-data-active/tree-row:in-focus-visible:`), so the ring follows keyboard focus the way the old focused buttons did. `data-active` is set on the active `treeitem`.
+  - Folder count: `fileCount`, or `matchCount` while filtering; a folder without `matchCount` under a query shows no count rather than a count from another query. The number is visual only (`aria-hidden`), and an `sr-only` suffix gives the accessible name, e.g. "Brand system (3 files)" or "Brand system (1 matching file)". File rows are named "brand-guidelines.pdf 4.6 MB Document". Explicit `{" "}` text nodes keep the words apart in the accessible name (jsdom doesn't lay out the flex children; the space isn't rendered).
+  - Indentation: `depth` spans of 24 px, each drawing a `border-border` line 16 px in (the old `ml-4 border-l pl-2`). Rows have no gaps (the content keeps a 1 px margin), so the segments form continuous guides.
+  - ARIA: `role="treeitem"`, `aria-level = depth + 1`, no `tabIndex`. Node rows set `aria-posinset`/`aria-setsize` (the listing's `total`). `aria-expanded` only on folders with `childCount > 0` (an empty folder is a leaf, as before and as in T21's Right key).
+  - `aria-selected` only on file rows (deviation): folders and status rows can't be selected, and the APG leaves `aria-selected` off items that aren't selectable (the old tree did the same). Status rows have no `aria-posinset`/`aria-setsize` (deviation): they aren't members of the listing, and giving them `total + 1` would announce a wrong set size.
+  - Status rows: `LoadingRow` (spinner, "Loading…"); `LoadMoreRow` ("Loading more… 1,100 of 5,000", `Intl.NumberFormat("en")`) calls `loader.loadMore(folderId)` in an effect keyed on `loader`, `folderId` and `loaded`, so it requests again after each page lands while the row stays in the rendered range (a row that stays mounted would otherwise stall; the loader dedupes); `ErrorRow` ("Couldn't load {folder name}", "Couldn't load project files" for the top level, the error `message` as the text's `title`) with a Retry button calling `loader.retry(folderId)`.
+  - Retry is `tabIndex={-1}` and prevents the default on `mousedown`: the tree is one tab stop with `aria-activedescendant`, so a focusable button inside it would add a second one and a click would take focus away from the container. Keyboard users retry with Enter/Space on the active error row (T21's `retry` action). The click still bubbles to `onActivate`.
+  - For later tasks: T22 passes a stable `onActivate` and `style` for positioning; no `measureElement` is needed (fixed heights). A click on a status row reaches `onActivate` too, so T22 decides whether it only activates or also loads/retries (the loader dedupes a double retry). T26 can target rows by `#tree-row-<key>` and by accessible name.
+  - Smoke: a throwaway route (removed) rendered the rows in Chromium with the URL mock: continuous guides, selected file ring and check, loading row, the load-more row counting up to "Loading more… 900 of 5,000" while it stayed rendered, the error row, Retry recovering with `failFirst=2` on the second click, and focus staying on the tree container after clicking Retry. The active outline showed only after keyboard focus.
+  - Gates: format, typecheck, 455 unit tests (20 files; `tree-row.test.tsx` has 7), build and `test:e2e` (1 passed, port 5220) pass. React Doctor (`--scope changed`) reported one `only-export-components` warning for `treeRowId` in the component file; a PR follow-up moved it to `tree-row-id.ts` (outside the original Touch list), and the W8 branch now reports no issues.
 
 ### T21: Tree keyboard model
 
@@ -604,7 +618,7 @@ flowchart TD
 
 ### T23: Preview port (`useNodeDetail`)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T07, T19
 - **Read first:** `app/components/project-overview/file-preview.tsx`, `file-preview.test.tsx`, `state/explorer-provider.tsx`.
 - **Touch:** `app/features/file-explorer/ui/preview/file-preview.tsx` (plus split per-category files if it exceeds ~250 lines), `ui/preview/use-node-detail.ts`, `ui/preview/file-preview.test.tsx`.
@@ -614,10 +628,18 @@ flowchart TD
   - Keep all current states: empty, loading, image/audio/video/document, media error, unsafe URL, open-file link. Add a "Couldn't load file details" state with Retry.
 - **Acceptance:** the ported preview tests pass against the new input, and a detail-fetch error shows a Retry that recovers.
 - **E2E:** not reachable before T25. T28 must cover every category's preview, the media-error fallback with "Open file", and the loading state while the detail request is pending. The "Couldn't load file details" state has no mock switch that fails `getNode`, so only the component test covers it.
+- **Outcome:**
+  - `ui/preview/use-node-detail.ts`: `useNodeDetail(selectedId)` returns `NodeDetailState`, a union on `status` (`idle | loading | success | error`) with `detail`, `error` (an `Error`; a non-`Error` rejection is wrapped) and a stable `retry`. `idle` means no selection; a selected id without a result is `loading` from the first render, so nothing flashes. The fetch runs in an effect keyed on `(api, id, attempt)` with its own `AbortController`; a new id or an unmount aborts it. An `AbortError`, or a failure after the abort, is never reported; a success that lands after the abort (the zero-latency mock ignores late aborts) still fills the cache but doesn't touch the state. The only state writes are the async settle and a render-time reset when the id changes (React's "adjusting state when a prop changes" pattern), so re-selecting a file that failed earlier loads it again instead of showing the old error. `retry` only acts in the `error` state.
+  - Cache: an LRU of `NODE_DETAIL_CACHE_SIZE = 20` successful details per API instance (a module `WeakMap` keyed by the `api` from `useApi()`, deviation: the provider isn't in the Touch list), so providers and tests never share entries. A hit shows at once with no request and refreshes recency; errors aren't cached. No invalidation after CRUD: nodes are immutable (no rename or update API), created nodes get new ids and deleted ids are never reused (T13), and a delete clears the selection (T18), so a stale entry can't be shown. Only a folder detail's counts could go stale, and the preview never renders folders.
+  - `ui/preview/file-preview.tsx` exports `FilePreview` (no props: reads `selectedId` with `useExplorer` and calls `useNodeDetail`), the presentational `SelectedFilePreview({ file: PreviewedFile, path })` (`PreviewedFile` = the `FileDetail` fields it shows; `path` runs from the top-level folder to the file name), `FileDetailPreview({ detail: FileDetail })` (builds `path` from `ancestors`), `NoSelectionPreview` and `GENERIC_DETAIL_ERROR`. The header path is joined with ` / ` as before. All the old copy stays (headings, "Select a file to preview", media labels, fallbacks, "Open file"). New states: "Loading file details…" (`role="status"`, badge "Loading") while `getNode` is pending, and "Couldn't load file details" (`role="alert"`, badge "Unavailable") showing the `ApiError` message or `GENERIC_DETAIL_ERROR`, with a Retry button. A folder detail renders the empty state.
+  - The old 363-line file is split (deviation, as the Touch list allows): `preview-media.tsx` (the four media previews and `PreviewMedia`), `preview-fallback.tsx` (`OpenFileButton`, `LoadingPreview`, `PreviewFallback`) and `preview-url.ts` (`getHttpPreviewUrl`, kept out of the component files for Fast Refresh). Conditional classes use `cn` instead of template strings.
+  - For later tasks: T25 renders `<FilePreview />` inside the provider in place of the old `FilePreview location=…`. T28 can target "Loading file details…" as the status text while `getNode` is pending (a `?latency=` URL makes it visible). The mock has no switch that fails `getNode`, so the error state stays covered by component tests only.
+  - Tests: `file-preview.test.tsx` (15) ports the five old tests to `FileDetailPreview` and adds the ancestor path, the empty, loading and error states, Retry recovering, a generic message for a non-`ApiError`, aborting and ignoring the previous request on a new selection, a cache hit with no request, re-loading a file that failed before, clearing the selection, and a nested file from the real mock. `use-node-detail.test.tsx` (4) covers idle, LRU eviction at the 21st entry, abort on unmount and per-API isolation.
+  - Gates: format, typecheck and 467 unit tests (21 files) pass; build and `test:e2e` (1 spec, port 5223) pass. React Doctor (`--scope changed --base main`) reported 4 `duplicate-jsx-subtree` warnings, each a match against the old `app/components/project-overview/file-preview.tsx`. A PR follow-up (deviation: outside the Touch list) turned that old file into a 20-line adapter that renders `SelectedFilePreview`/`NoSelectionPreview` from a `FileLocation`, so the index route already shows the new preview components and the old tests and smoke spec exercise them. `PreviewMedia` takes only `name`, `category` and `previewUrl`. React Doctor now reports no issues; T25 deletes the adapter.
 
 ### T24: Filter toolbar port (debounced)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T06, T19
 - **Read first:** `app/components/project-overview/filter-toolbar.tsx`, `domain/filters.ts`, `state/loader.ts` (`applyFilters`, `loadStats`).
 - **Touch:** `app/features/file-explorer/ui/filter-toolbar/filter-toolbar.tsx`, `filter-toolbar.test.tsx`.
@@ -628,6 +650,15 @@ flowchart TD
   - The status line and live region use the stats: `Showing X of Y files`, no matches, "Fix the size filters…", and the D3 announcement from the store.
 - **Acceptance:** tests (fake timers) show rapid typing producing one `applyFilters` call, an invalid range never calling it, Enter applying immediately, Reset cancelling the pending call, and the status text announcing the counts.
 - **E2E:** not reachable before T25. T27 must cover the debounced apply after typing, Enter applying at once, Reset, the field errors for an invalid range, and the `Showing X of Y files` status line.
+- **Outcome:**
+  - `ui/filter-toolbar/filter-toolbar.tsx` exports `FilterToolbar`, which takes no props and reads everything through the provider hooks. The markup, labels, ids (`file-name`, `minimum-size`, `maximum-size`), toggle names ("Audio files", "Image files", "Video files"), "Reset filters" and the field-error rules are the old toolbar's. A size field's error shows once it's left or the draft is committed with Enter, and hides again while typing; an invalid range marks both fields.
+  - The draft is local state and is validated on every render. `useDebouncedCallback(applyDraft, 250)` receives each new draft and calls `loader.applyFilters(query)` only when `toFileQuery` returns a query (an empty draft gives an inactive query, which the loader treats as `null`). Enter and submit call `flush()`. Reset calls `cancel()`, clears the draft and the touched fields, and calls `loader.applyFilters(null)` at once; it's enabled while the draft has input or a query is applied. `use-debounce` cancels a pending call on unmount.
+  - File-type toggles apply at once (deviation): each toggle schedules the new draft and flushes it, so a click (and any pending typing) doesn't wait for the debounce. Rapid clicks can send several queries; the loader aborts the superseded ones.
+  - Status texts come from `stats` and `appliedQuery`, with the old copy and `en-US` grouped numbers: `Showing all {total} files.`, `Showing {filtered} of {total} files.`, `No matching files. Showing 0 of {total} files.`, and "Fix the size filters to update the file results." while the draft is invalid. The badge shows `{shown} of {total} files`, or "Filters paused" for an invalid draft. While the counts load (a `null` total, or a `null` filtered count under a query) the line says "Counting files…" / "Counting matching files…" and the badge "Counting…", so a previous query's count never shows. The status describes the applied query, so a draft still waiting for the debounce keeps the last applied counts.
+  - Live regions: the result region (`role="status"`, polite, atomic) announces the settled line. Loading counts, and an invalid draft whose errors aren't showing yet, keep its last message, so transient states aren't read out; Enter and Reset repeat the message. The D3 notice (the store's `announcement`, e.g. "project-brief.pdf doesn't match the filters and was deselected.") is a second polite region without a role (deviation: keeping `role="status"` unique for T27). A store subscription announces it whenever one update changes `appliedQuery` and clears the selection, so the same file deselected twice is announced twice.
+  - For later tasks: T25 places `<FilterToolbar />` inside `ExplorerProvider` above the tree. T27 can target the copy above with `getByRole("status")` and the `p` status line. A failed filtered count keeps "Counting matching files…" until the next query or `loadStats()`, because the store resets `stats.filtered` when the key changes.
+  - Tests use `vi.useFakeTimers({ shouldAdvanceTime: true })`: Testing Library's async wrapper waits on `setTimeout`, and with vitest's fake timers alone every `user` action hangs. The debounce is asserted right after typing and after `advanceTimersByTimeAsync(250)` inside `act`.
+  - Gates: format, typecheck, 457 unit tests (20 files), build and `test:e2e` (1 smoke spec) pass; `filter-toolbar.test.tsx` has 9 tests (5 runs in a row passed). React Doctor (`--scope changed --base main`) reports no issues after moving the status texts into a pure `filterStatus` helper (it flagged the component's complexity before).
 
 ---
 
