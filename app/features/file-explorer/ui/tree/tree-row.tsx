@@ -256,8 +256,21 @@ function Spinner() {
   )
 }
 
+/**
+ * Requests the folder's first page when the row enters the rendered range,
+ * so a folder expanded by a click, a key or a filter reveal loads only once
+ * it's scrolled to. The slot key survives a query change, so the query key
+ * re-runs the request for the new query; the loader dedupes.
+ */
 function LoadingTreeRow({ row, ...props }: TreeRowProps & { row: LoadingRow }) {
   const isActive = useIsActive(row.key)
+  const loader = useLoader()
+  const queryKey = useExplorer(currentQueryKey)
+  const { folderId } = row
+
+  useEffect(() => {
+    void loader.ensureChildren(folderId)
+  }, [loader, folderId, queryKey])
 
   return (
     <RowShell

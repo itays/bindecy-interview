@@ -144,7 +144,7 @@ flowchart TD
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | done |
 | T20 | Tree row components | 4 | T16, T19 | W8 | done |
 | T21 | Tree keyboard model | 4 | T16 | W6 | done |
-| T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
+| T22 | Virtual tree | 4 | T08, T20, T21 | W9 | done |
 | T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | done |
 | T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | done |
 | T25 | Page cutover + delete old code | 5 | T22, T23, T24 | W10 | todo |
@@ -604,7 +604,7 @@ flowchart TD
 
 ### T22: Virtual tree
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T08, T20, T21
 - **Read first:** `app/components/project-overview/file-tree.tsx` (card header, empty state), `ui/tree/tree-row.tsx`, `ui/tree/tree-keyboard.ts`, `state/visible-rows.ts`, `components/ui/scroll-area.tsx`.
 - **Touch:** `app/features/file-explorer/ui/tree/virtual-tree.tsx`, `tree-panel.tsx`, `virtual-tree.test.tsx`.
@@ -615,6 +615,17 @@ flowchart TD
   - `TreePanel` is the card (title, file count badge from the stats, description, the no-results `Empty` state), with **no Expand all** (D9) and a header slot for T29's actions.
 - **Acceptance:** component tests (with the jsdom size mocks) cover arrow navigation updating `aria-activedescendant`, Enter expanding a folder and showing a loading row followed by the children, and a 5,000-child folder rendering no more than ~60 `treeitem`s.
 - **E2E:** not reachable before T25. T26 must cover clicking a folder (toggle) and a file (select), `aria-activedescendant` following the arrow keys, and the bounded `treeitem` count in the 5,000-child folder.
+- **Outcome:**
+  - `ui/tree/virtual-tree.tsx` exports `VirtualTree`. It reads `useVisibleRows()` and `activeId`, and renders a `ScrollArea` whose viewport (T08's `viewportRef`) is the scroll element. `useVirtualizer` gets `estimateSize` (`rowHeight`) and `getItemKey` (`row.key`) as callbacks keyed on `rows`, so virtual-core recomputes offsets only when the rows change, plus `overscan: 10` and 8 px `paddingStart`/`paddingEnd`. Rows are absolutely positioned with `translateY` and never measured.
+  - Container: `role="tree"`, `aria-label="Project files"`, `tabIndex={0}` and `aria-activedescendant={treeRowId(activeKey)}`. `onKeyDown` runs `resolveTreeKey` with `store.getState()`, prevents the default only for a handled action, dispatches it (`setActive`, `toggleExpanded`, `select`, `loader.loadMore`, `loader.retry`), then calls `scrollToIndex(i, { align: "auto" })` on the new or current active index. Keys with Alt, Ctrl or Meta are left to the browser. `delete` is ignored without `preventDefault` until T30.
+  - The active row is always rendered (deviation, a `rangeExtractor` that adds its index to the window), so `aria-activedescendant` never points at an unmounted row after a wheel scroll or a jump such as End. The active index is a `findIndex` memoized on `rows` and `activeId`, so scrolling doesn't rescan the rows.
+  - Focusing the tree with no active row makes the first row active, as the old tree did. A click (the stable `activateRow` passed as `onActivate`) sets the row active, then toggles a folder or selects a file. A click on a status row only activates it: Retry and the load-more row do their own requests.
+  - First pages (deviation, `tree-row.tsx` is outside the Touch list): nothing requested the first page of a folder expanded by a click or key, of the folders revealed by a filter, or of the top level under a new query. `LoadingTreeRow` now calls `loader.ensureChildren(folderId)` in an effect keyed on the loader, the folder and the current query key, the "row mounts" trigger in plan.md's loading table. The query key is needed because the slot key `status:<folderKey>` keeps the row mounted when the filters change while it's loading. `tree-row.test.tsx` covers that case.
+  - `ui/tree/tree-panel.tsx` exports `TreePanel` and `TreePanelProps` (`actions?: ReactNode`, rendered before the count for T29). It's the "Project files" card from the old `file-tree.tsx` without Expand all (D9). The badge shows `stats.total`, or `stats.filtered` while filtering, with an `sr-only` "files" or "matching files" suffix, and is hidden until the count loads. When the top-level listing loads with `total === 0`, the tree is replaced by the `Empty` state ("No matching files" while filtering, "No project files" otherwise) and the description asks to adjust the filters.
+  - Known, for a follow-up (store, outside the Touch list): the active status slot survives its content arriving. Right into an unloaded folder makes its loading row active. If the first page completes the listing, the row disappears and nothing is active; the next arrow key starts from the first row. If more pages exist, the active row becomes the load-more row below the first page, and because it's pinned in the window, it keeps loading pages until the folder is complete. The fix is for `receivePage` to move an active status slot to the page's first new item.
+  - Base UI makes the scroll viewport a tab stop (`tabIndex=0`) once it overflows, so Shift+Tab from the tree stops on the viewport. The old tree had the same stop.
+  - Smoke: a throwaway route (removed) rendered `FilterToolbar` and `TreePanel` in Chromium with `?latency=300`. Tab reached the tree and made "Asset library" active. Arrows, Home and End moved the ring, and the viewport scrolled to follow them. Right expanded "Stock footage" and then moved to its loading row. A wheel scroll to 40,000 px kept 30 `treeitem`s in the DOM, including the pinned active row. The "guidelines" filter revealed "Brand system" with its match. A no-match filter showed the empty state and a count of 0. `?failFirst=1` showed the error row, and Enter retried it. Clicks toggled "Brand system" and selected a file while focus stayed on the tree. A filter change had no long tasks.
+  - Gates: format, typecheck, 489 unit tests (24 files; `virtual-tree.test.tsx` has 5, `tree-row.test.tsx` has 8), build and `test:e2e` (1 passed, port 5222) pass. Mutation checks: without the `rangeExtractor` the active-row test fails, without the loading-row request 3 tests fail, and without the query-key dependency the new `tree-row` test fails.
 
 ### T23: Preview port (`useNodeDetail`)
 
