@@ -134,7 +134,7 @@ flowchart TD
 | T09 | Task-doc addendum | 1 | T02 | W2 | done |
 | T10 | Seeded generator + curated fixture | 2 | T05 | W3 | done |
 | T11 | Mock DB core | 2 | T07, T10 | W4 | done |
-| T12 | Mock query index | 2 | T06, T11 | W5 | todo |
+| T12 | Mock query index | 2 | T06, T11 | W5 | done |
 | T13 | Mock mutations | 2 | T11 | W5 | done |
 | T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | todo |
 | T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | done |
@@ -380,7 +380,7 @@ flowchart TD
 
 ### T12: Mock query index
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T06, T11
 - **Read first:** `domain/filters.ts`, `api/mock/mock-db.ts`, `app/components/project-overview/file-tree-utils.test.ts` (the semantics cases to port).
 - **Touch:** `app/features/file-explorer/api/mock/mock-query-index.ts`, `mock-query-index.test.ts`.
@@ -392,6 +392,12 @@ flowchart TD
     - `search(query, cursor, limit)` returns hits with `ancestorIds`, in tree order;
     - `stats(query)`.
 - **Acceptance:** the semantics cases from the old `file-tree-utils.test.ts` are ported to the new API and pass. `matchCount` on the ancestors of a deep match is correct. The LRU evicts its oldest entry, and the cache clears on mutation. Paging works over filtered children.
+- **Outcome:**
+  - `mock-query-index.ts` exports `createQueryIndex(db)`. `evaluate(query)` makes one iterative depth-first pass over the sorted `childIds`, O(n) with no ancestor walk per node. It passes the nearest name-matched ancestor down the walk, so `matchesFile` stays the only file-match rule. It returns `matchedFileIds` (an array in tree order, not a Set, because search needs positions), `matchCountByFolder` (folders with at least one match; no `ROOT_ID` entry), `folderNameMatches` and `keptIds` (the `includeIds` for `db.listChildren`). Measured: about 1 ms at 10k nodes and 16 ms at 100k.
+  - The keep rule is the old `filterProjectTree` rule. A folder is kept when its own name matches, when it keeps a child, or when it sits below a name-matched folder and the query has no size or category limit. So a name-matched folder with no matching files is kept with `matchCount` 0. An inactive query keeps every node, but T14 must route an omitted or inactive query to `db.listChildren` (O(log n + limit), no `matchCount`).
+  - An LRU keeps up to 5 evaluations by `queryKey`; a hit refreshes the entry. Any `db.onMutate` event clears the cache, and `dispose()` unsubscribes.
+  - `listChildren(folderId, query, { cursor, limit })` pages the kept children with the `db.listChildren` keyset cursor, costs O(children) per page and throws the same errors. Folders carry `matchCount`. `search(query, { cursor, limit })` returns new `SearchHit`s in tree order; `ancestorIds` run top-level first without the file, ready for `revealFolders`. `total` counts every hit. The search cursor is base64 JSON of the last hit's path of `SortKey`s, found by binary search in pre-order, so creates and deletes between pages never skip or repeat a hit. A bad cursor or limit throws `validation`. `stats(query)` returns the matched file count.
+  - Gates: format, typecheck and 279 unit tests (14 files, after the rebase onto T16 and T13) pass; `mock-query-index.test.ts` has 43 tests. React Doctor reports no issues. A throwaway test (not committed) ran T13 mutations against the index: the cache cleared, and `stats`, `search` ancestors and `matchCount` followed each create and delete.
 
 ### T13: Mock mutations
 
