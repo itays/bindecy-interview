@@ -173,9 +173,35 @@ describe("TreeRow", () => {
         categories: [],
       })
     )
-    await act(() => tree.loader.ensureChildren(null))
 
     expect(await treeItem("Brand system (1 matching file)")).toBeInTheDocument()
+  })
+
+  it("requests the top level again when the filters change while it's loading", async () => {
+    const mock = createMockFileExplorerApi({ latency: 0 })
+    const listChildren = vi.fn<FileExplorerApi["listChildren"]>(
+      (request, signal) =>
+        request.query?.name === "brand"
+          ? new Promise<never>(() => {})
+          : mock.listChildren(request, signal)
+    )
+    const tree = renderTree({ ...mock, listChildren })
+    await treeItem("Brand system (3 files)")
+    const query = { minBytes: null, maxBytes: null, categories: [] }
+
+    await act(() => tree.loader.applyFilters({ ...query, name: "brand" }))
+    expect(await treeItem("Loading…")).toHaveAttribute("aria-level", "1")
+
+    await act(() => tree.loader.applyFilters({ ...query, name: "launch" }))
+
+    expect(await treeItem(/^Launch campaign/)).toBeInTheDocument()
+    expect(listChildren).toHaveBeenCalledWith(
+      expect.objectContaining({
+        folderId: null,
+        query: expect.objectContaining({ name: "launch" }),
+      }),
+      expect.anything()
+    )
   })
 
   it("requests the next page when the load-more row mounts, and again after each page while it stays", async () => {
