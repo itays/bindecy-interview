@@ -127,7 +127,7 @@ flowchart TD
 | T12 | Mock query index | 2 | T06, T11 | W5 | todo |
 | T13 | Mock mutations | 2 | T11 | W5 | todo |
 | T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | todo |
-| T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | todo |
+| T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | done |
 | T16 | Visible rows (flatten) | 3 | T15 | W5 | todo |
 | T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | todo |
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | todo |
@@ -409,7 +409,7 @@ flowchart TD
 
 ### T15: Explorer store core (incl. D3)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T04, T06
 - **Read first:** `plan.md` §State management, `domain/types.ts`, `domain/filters.ts`.
 - **Touch:** `app/features/file-explorer/state/explorer-store.ts`, `explorer-store.test.ts`.
@@ -422,6 +422,12 @@ flowchart TD
   - `applyFilters(query | null)` sets `appliedQuery`, drops `filterExpanded` for other keys, and applies **D3**: if the selected file fails `matchesFile` over its `parentId` chain, it clears `selectedId` and sets `announcement` in the same `set`.
   - `isFiltering` / `currentQueryKey` selectors.
 - **Acceptance:** tests cover toggles in browse vs filter mode, clearing filters restoring browse expansion, D3 clearing a non-matching selection and keeping a matching one (including a match via an ancestor folder name), `applyFilters(null)` keeping the selection, and `receivePage` append vs replace.
+- **Outcome:**
+  - `createExplorerStore()` is a vanilla Zustand store (`zustand/vanilla`, no React). Listings are keyed `listings[queryKey][folderKey(folderId)]`; `folderKey` maps the API's `null` to `ROOT_ID`, and browse mode uses `BROWSE_QUERY_KEY = "browse"`, which can't collide with the JSON-array output of `queryKey()`.
+  - `receivePage` builds one new `nodesById` Map per page, appends or replaces ids, takes the page's `nextCursor`/`total` and resets the listing to `idle`. `Listing.error` is a user-facing `string | null`; `setListingStatus` accepts only `idle`/`loading` and clears the error, so an `error` status always has a message.
+  - `applyFilters` treats an inactive query as `null`, returns the same state for an unchanged key, resets `filterExpanded` and leaves browse `expanded` alone. It also drops every filtered listing (browse listings keep their reference), because a folder's `matchCount` in `nodesById` belongs to one query. D3 runs in the same `set`: a selected file that fails `matchesFile` over its `parentId` chain is deselected and `announcement` names it.
+  - `revealFolders` ignores a key that isn't the applied filtered key, so a late reveal from a superseded search can't expand folders. `select`, `setActive`, an unchanged `setListingStatus` and an already-expanded reveal return the same state, so subscribers aren't notified.
+  - Gates: format, typecheck and 147 unit tests (10 files) pass; `explorer-store.test.ts` has 24 tests.
 
 ### T16: Visible rows (flatten)
 
