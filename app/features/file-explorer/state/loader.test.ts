@@ -61,10 +61,21 @@ function createFakeApi() {
   return { api, calls }
 }
 
+/** The loader loads only folders the store knows, so tests seed folder `f`. */
 function setup() {
   const { api, calls } = createFakeApi()
   const store = createExplorerStore()
   const loader = createLoader(api, store)
+  const folder: NodeSummary = {
+    id: "f",
+    name: "f",
+    parentId: null,
+    type: "folder",
+    childCount: 1,
+    fileCount: 1,
+  }
+
+  store.setState({ nodesById: new Map([["f", folder]]) })
 
   return { calls, loader, store }
 }
@@ -171,6 +182,18 @@ describe("ensureChildren", () => {
     expect(nthCall(calls.listChildren, 0).request.query).toEqual(photosQuery)
     expect(listing(store, photosKey, "f")?.ids).toEqual(["a"])
     expect(listing(store, BROWSE_QUERY_KEY, "f")).toBeUndefined()
+  })
+
+  it("drops the first page of a folder deleted while it loads", async () => {
+    const { calls, loader, store } = setup()
+    const load = loader.ensureChildren("f")
+
+    store.setState({ nodesById: new Map() })
+    nthCall(calls.listChildren, 0).resolve(page(["a"]))
+    await load
+
+    expect(store.getState().nodesById.has("a")).toBe(false)
+    expect(listing(store, BROWSE_QUERY_KEY, "f")?.ids).toEqual([])
   })
 })
 

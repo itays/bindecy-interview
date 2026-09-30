@@ -124,10 +124,10 @@ export function createLoader(
 
     /**
      * Unregisters the request and tells whether its outcome still applies:
-     * a scope reset or `dispose` hasn't dropped it, its key is live and, for
-     * a next page, the listing still ends at `cursor`. A first page lands even
-     * if a mutation dropped its listing meanwhile, so the folder's loading row
-     * can't hang.
+     * a scope reset or `dispose` hasn't dropped it, its key is live, its
+     * folder wasn't deleted meanwhile and, for a next page, the listing still
+     * ends at `cursor`. A first page lands even if a mutation dropped its
+     * listing meanwhile, so the folder's loading row can't hang.
      */
     const settle = (): boolean => {
       const slot = inFlight.get(key)
@@ -137,9 +137,14 @@ export function createLoader(
       }
 
       slot.delete(requestKey)
-      const listing = store.getState().listings[key]?.[folderKey(folderId)]
+      const { listings, nodesById } = store.getState()
+      const listing = listings[key]?.[folderKey(folderId)]
 
-      return isLive(key) && (cursor === null || listing?.nextCursor === cursor)
+      return (
+        isLive(key) &&
+        (folderId === null || nodesById.has(folderId)) &&
+        (cursor === null || listing?.nextCursor === cursor)
+      )
     }
     const signal = signalFor(key)
 
