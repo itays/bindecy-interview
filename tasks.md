@@ -142,11 +142,11 @@ flowchart TD
 | T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | done |
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | done |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | done |
-| T20 | Tree row components | 4 | T16, T19 | W8 | review |
+| T20 | Tree row components | 4 | T16, T19 | W8 | done |
 | T21 | Tree keyboard model | 4 | T16 | W6 | done |
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
-| T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | review |
-| T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | review |
+| T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | done |
+| T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | done |
 | T25 | Page cutover + delete old code | 5 | T22, T23, T24 | W10 | todo |
 | T26 | E2E: tree | 5 | T25 | W11 | todo |
 | T27 | E2E: filters + selection clearing | 5 | T25 | W11 | todo |
@@ -558,7 +558,7 @@ flowchart TD
 
 ### T20: Tree row components
 
-- **Status:** review
+- **Status:** done
 - **Depends on:** T16, T19
 - **Read first:** `app/components/project-overview/tree-node.tsx:124-260` (current row markup and styles), `state/visible-rows.ts`, `state/explorer-provider.tsx` (hooks), `ui/file-category-details.ts`.
 - **Touch:** `app/features/file-explorer/ui/tree/tree-row.tsx`, `tree-row.test.tsx`.
@@ -618,7 +618,7 @@ flowchart TD
 
 ### T23: Preview port (`useNodeDetail`)
 
-- **Status:** review
+- **Status:** done
 - **Depends on:** T07, T19
 - **Read first:** `app/components/project-overview/file-preview.tsx`, `file-preview.test.tsx`, `state/explorer-provider.tsx`.
 - **Touch:** `app/features/file-explorer/ui/preview/file-preview.tsx` (plus split per-category files if it exceeds ~250 lines), `ui/preview/use-node-detail.ts`, `ui/preview/file-preview.test.tsx`.
@@ -639,7 +639,7 @@ flowchart TD
 
 ### T24: Filter toolbar port (debounced)
 
-- **Status:** review
+- **Status:** done
 - **Depends on:** T06, T19
 - **Read first:** `app/components/project-overview/filter-toolbar.tsx`, `domain/filters.ts`, `state/loader.ts` (`applyFilters`, `loadStats`).
 - **Touch:** `app/features/file-explorer/ui/filter-toolbar/filter-toolbar.tsx`, `filter-toolbar.test.tsx`.
