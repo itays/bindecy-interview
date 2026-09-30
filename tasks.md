@@ -113,9 +113,9 @@ flowchart TD
 
 | ID | Title | Phase | Depends on | Wave | Status |
 | --- | --- | --- | --- | --- | --- |
-| T01 | SPA mode + baseline gates | 0 | — | W0 | todo |
-| T02 | Playwright setup + smoke test | 0 | T01 | W1 | todo |
-| T03 | CI workflow | 0 | T02 | W2 | todo |
+| T01 | SPA mode + baseline gates | 0 | — | W0 | done |
+| T02 | Playwright setup + smoke test | 0 | T01 | W1 | done |
+| T03 | CI workflow | 0 | T02 | W2 | review |
 | T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | todo |
 | T05 | Domain types + API contract | 1 | T02 | W2 | todo |
 | T06 | Domain filters | 1 | T05 | W3 | todo |
@@ -152,7 +152,7 @@ flowchart TD
 
 ### T01: SPA mode + baseline gates
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** —
 - **Read first:** `react-router.config.ts`, `app/root.tsx`, `package.json`, the React Router "SPA Mode" docs (current version).
 - **Touch:** `react-router.config.ts`, `app/root.tsx`, `package.json`, `bun.lock`, `tasks.md` (the baseline notes below).
@@ -162,11 +162,17 @@ flowchart TD
   3. Replace the `start` script, which uses `react-router-serve` and needs a server build, with a static server for `build/client` that falls back to `index.html`. Use the command the docs recommend.
   4. Remove dependencies that SPA mode makes unused (`@react-router/serve`, and `@react-router/node` / `isbot` only if the build proves them unused).
 - **Acceptance:** `bun run build` emits `build/client/index.html` and no server build. `bun run start` serves the app, and the tree, filters and preview work in a browser. All baseline gates remain green, or any failure is pre-existing and recorded.
-- **Baseline:** _to be filled in by T01_
+- **Baseline** (recorded at `d1cf1d6` before editing): `format:check` ✅, `typecheck` ✅, `test` ✅ (5 files, 34 tests), `build` ✅. The only noise is a pre-existing Vite warning: "The `envFile` option is deprecated".
+- **Outcome:**
+  - `ssr: false` is set. `build/` now contains only `client/` (the server build is removed after the root route is prerendered into `index.html`).
+  - Added a root `HydrateFallback` ("Loading project files…", `role="status"`, theme tokens) so `index.html` doesn't paint an empty body.
+  - `start` is now `vite preview --outDir build/client`. Vite is already a dependency, and it serves `index.html` for unknown paths (checked with curl on `/`, `/?nodes=1000` and `/does-not-exist`).
+  - Removed `@react-router/serve`. **Kept** `@react-router/node`, which the SPA docs require for build-time root rendering, and `isbot`, which React Router's default `entry.server.node.tsx` imports at build time.
+  - All gates green afterwards. Browser check on `bun run start`: folder toggle, file preview and name filter work, with no page errors.
 
 ### T02: Playwright setup + smoke test
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T01
 - **Read first:** `skill://setting-up-playwright`, `package.json`, `vitest.config.ts`, `.gitignore`.
 - **Touch:** `package.json`, `bun.lock`, `playwright.config.ts`, `e2e/smoke.e2e.ts`, `.gitignore`.
@@ -187,10 +193,15 @@ flowchart TD
      - Select `brand-guidelines.pdf`, then assert the preview heading shows the name.
      - Assert no page errors.
 - **Acceptance:** `bunx playwright test --list` lists only `e2e/` specs. `bun run test` (Vitest) still collects no `.e2e.ts` files. `bun run test:e2e:smoke` passes. `E2E_PORT=5299 bun run test:e2e:smoke` also passes.
+- **Outcome:**
+  - `@playwright/test` 1.63.0 with Chromium.
+  - `webServer` runs `bun run build && bun run start --host 127.0.0.1 --port $E2E_PORT --strictPort` (default port 4173). It tests the production SPA build, not the dev server, because Vite's first-run dependency optimization reloads the page mid-test.
+  - The smoke test aborts requests to non-loopback hosts, since fixture previews point at w3.org, Unsplash and MDN, and headless Chromium blocks the PDF iframe (`ERR_BLOCKED_BY_CLIENT`). It only collects `pageerror`, not failed requests.
+  - Verified: `--list` shows only `e2e/smoke.e2e.ts`; Vitest still collects 5 files / 34 tests; `test:e2e:smoke` passes on the default port and with `E2E_PORT=5299`; typecheck and format pass.
 
 ### T03: CI workflow
 
-- **Status:** todo
+- **Status:** review. Local checks pass; waiting on the first GitHub run.
 - **Depends on:** T02
 - **Read first:** `.github/workflows/react-doctor.yml`, `package.json` scripts, the current `oven-sh/setup-bun` and `actions/upload-artifact` docs.
 - **Touch:** `.github/workflows/ci.yml`.
@@ -199,6 +210,11 @@ flowchart TD
   - Steps: checkout → setup-bun → `bun install --frozen-lockfile` → `format:check` → `typecheck` → `test` → `build` → `bunx playwright install --with-deps chromium` → `test:e2e:smoke`.
   - Upload `playwright-report/` and `test-results/` on failure, tolerating missing files.
 - **Acceptance:** the workflow file passes `actionlint` if available (otherwise it's reviewed manually), and every script it calls exists. Report the first CI run's result on a pushed branch.
+- **Outcome:**
+  - `.github/workflows/ci.yml` pins `actions/checkout@v7`, `oven-sh/setup-bun@v2` (Bun `1.4.0`, matching the local lockfile format) and `actions/upload-artifact@v7`, the latest releases per `gh api`.
+  - `actionlint` 1.7.12: no findings.
+  - The full step sequence ran locally with `CI=1` (frozen install, format, typecheck, 34 unit tests, build, smoke test with `reuseExistingServer: false`): all pass.
+  - **Open:** the workflow triggers on `pull_request` and on pushes to `main`, so the first real run needs `refactor/lazy-explorer` pushed and a PR opened. Move T03 to `done` once that run is green.
 
 ---
 

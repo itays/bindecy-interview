@@ -42,6 +42,7 @@ This iteration intentionally uses local data. It does not include an API, upload
 - Lucide icons
 - Vite
 - Vitest and Testing Library
+- Playwright (Chromium) for end-to-end tests
 - Bun
 
 ## Getting started
@@ -66,9 +67,13 @@ Then open the local URL printed by React Router, typically `http://localhost:517
 bun run dev          # Start the development server
 bun run test         # Run the unit and component test suite
 bun run test:watch   # Run tests in watch mode
+bun run test:e2e     # Build, serve and run the Playwright suite (Chromium)
+bun run test:e2e:smoke  # Run only the @smoke end-to-end test (used in CI)
+bun run test:e2e:headed # Run the Playwright suite in a visible browser
+bun run test:e2e:ui  # Open Playwright UI mode
 bun run typecheck    # Generate route types and run TypeScript checks
-bun run build        # Create a production build
-bun run start        # Serve the production build
+bun run build        # Create a production build (SPA: build/client)
+bun run start        # Serve build/client with vite preview
 bun run format       # Format TypeScript and TSX files with Prettier
 bun run format:check # Check formatting without changing files
 ```
