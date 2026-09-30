@@ -26,12 +26,14 @@
 bun run format:check && bun run typecheck && bun run test
 ```
 
-Tasks that touch config, routes or the page also run `bun run build`. Tasks with E2E specs also run `bun run test:e2e`.
+Tasks that touch config, routes or the page also run `bun run build`. Tasks with E2E specs or UI changes also run `bun run test:e2e`.
 
 ### Rules for implementers
 
 - Read only the files listed under *Read first*, plus the files you touch. The contract types in T05 are the source of truth; don't redefine them.
 - Tests: behavior, boundaries and errors. Don't test wiring, mock echoes or CSS classes (see the existing test style in `app/components/project-overview/*.test.*`).
+- **UI changes need Playwright coverage.** A task that changes what the user sees or does (markup, clicks, keyboard, focus, loading and error states) adds or updates `e2e/*.e2e.ts` specs for that behavior in the same task and runs `bun run test:e2e`. New specs must pass with `--repeat-each=3`. Component tests stay required; they don't replace the E2E spec.
+  - Until T25 the index route renders the old UI, so Playwright can't reach the new components from T20–T24. Each of those tasks has an **E2E** line naming the task (T25–T28) that must cover its flows, and that task isn't `done` until they're covered.
 - Don't delete old code before **T25**. Until then the old UI stays on the index route.
 
 ## Dependency graph
@@ -507,6 +509,7 @@ flowchart TD
   - Status rows: `LoadingRow` (spinner, "Loading…"), `LoadMoreRow` ("Loading more… {loaded} of {total}", which calls `loader.loadMore` on mount), and `ErrorRow` ("Couldn't load {folder name}", or "Couldn't load project files" for the root, plus a Retry button).
   - Each row has `id="tree-row-{key}"`, `role="treeitem"` and the aria-level, posinset, setsize, expanded and selected attributes. Rows are not focusable; the container owns focus.
 - **Acceptance:** component tests cover the accessible name and state for folder and file rows, selected and expanded states exposed through ARIA (not classes), the load-more row requesting the next page on mount, and Retry calling `loader.retry`.
+- **E2E:** not reachable before T25. T26 must cover folder and file rows (accessible name, `aria-expanded`, `aria-selected`), the "Loading…" row, the "Loading more… N of M" row, and the error row with Retry.
 
 ### T21: Tree keyboard model
 
@@ -516,6 +519,7 @@ flowchart TD
 - **Touch:** `app/features/file-explorer/ui/tree/tree-keyboard.ts`, `tree-keyboard.test.ts`.
 - **Change:** `resolveTreeKey(rows, activeIndex, key, isExpanded) → { type: 'move', index } | { type: 'toggle', id } | { type: 'select', id } | { type: 'load-more' | 'retry', folderId } | { type: 'delete', id } | null`. It covers Up/Down/Home/End, Right (expand, or move to the first child), Left (collapse, or move to the parent via `parentId`), Enter/Space and Delete. A pure function.
 - **Acceptance:** tests cover every key at the boundaries (first and last row), Left from a nested file to its parent, Right on an expanded folder, and Enter on a status row.
+- **E2E:** pure function; T26's keyboard flow covers it through T22's container. That flow must include Enter/Space on a folder and on a file, and Left from a nested file to its parent.
 
 ### T22: Virtual tree
 
@@ -529,6 +533,7 @@ flowchart TD
   - Clicking a row sets it active and either toggles the folder or selects the file.
   - `TreePanel` is the card (title, file count badge from the stats, description, the no-results `Empty` state), with **no Expand all** (D9) and a header slot for T29's actions.
 - **Acceptance:** component tests (with the jsdom size mocks) cover arrow navigation updating `aria-activedescendant`, Enter expanding a folder and showing a loading row followed by the children, and a 5,000-child folder rendering no more than ~60 `treeitem`s.
+- **E2E:** not reachable before T25. T26 must cover clicking a folder (toggle) and a file (select), `aria-activedescendant` following the arrow keys, and the bounded `treeitem` count in the 5,000-child folder.
 
 ### T23: Preview port (`useNodeDetail`)
 
@@ -541,6 +546,7 @@ flowchart TD
   - Port the preview to take `NodeDetail`; the path comes from `ancestors`.
   - Keep all current states: empty, loading, image/audio/video/document, media error, unsafe URL, open-file link. Add a "Couldn't load file details" state with Retry.
 - **Acceptance:** the ported preview tests pass against the new input, and a detail-fetch error shows a Retry that recovers.
+- **E2E:** not reachable before T25. T28 must cover every category's preview, the media-error fallback with "Open file", and the loading state while the detail request is pending. The "Couldn't load file details" state has no mock switch that fails `getNode`, so only the component test covers it.
 
 ### T24: Filter toolbar port (debounced)
 
@@ -554,6 +560,7 @@ flowchart TD
   - Enter calls `flush()`. Reset calls `cancel()` and applies the empty filters immediately.
   - The status line and live region use the stats: `Showing X of Y files`, no matches, "Fix the size filters…", and the D3 announcement from the store.
 - **Acceptance:** tests (fake timers) show rapid typing producing one `applyFilters` call, an invalid range never calling it, Enter applying immediately, Reset cancelling the pending call, and the status text announcing the counts.
+- **E2E:** not reachable before T25. T27 must cover the debounced apply after typing, Enter applying at once, Reset, the field errors for an invalid range, and the `Showing X of Y files` status line.
 
 ---
 
@@ -569,6 +576,7 @@ flowchart TD
   - **Delete:** `app/components/project-overview/`, `app/data/project-files.ts`, `app/types/project-node.ts`.
 - **Change:** `FileExplorer` renders `ExplorerProvider` with the header, the filter toolbar, and the grid holding `TreePanel` and the preview (same layout classes as today), and the route renders it. Delete the old feature code and its tests. Update the smoke test only if a selector changed; the flows stay the same.
 - **Acceptance:** all gates plus `build` and `test:e2e` pass. No imports of the deleted paths remain (`rg` shows none). A manual check at 1280 px and 390 px: layout unchanged, no horizontal overflow.
+- **E2E:** after the cutover, `e2e/smoke.e2e.ts` exercises the new explorer with the same flows (expand "Brand system", select `brand-guidelines.pdf`, see the preview, no page errors). It runs with the default mock config and its 250 ms latency, so it waits with web-first assertions, never fixed timeouts. The full `bun run test:e2e` passes.
 
 ### T26: E2E: tree
 
@@ -579,7 +587,8 @@ flowchart TD
   - expanding a folder shows "Loading…" and then the children;
   - scrolling the Stock footage folder loads more pages (checked by treeitem names), and the DOM holds no more than ~100 `treeitem`s after reaching row 1,000;
   - the keyboard flow (Down, Right, Left, Home, End);
-  - `?failFirst=1` makes the root listing on mount fail, which shows an error row; Retry then loads the root folders.
+  - `?failFirst=1` makes the root listing on mount fail, which shows an error row; Retry then loads the root folders;
+  - the row states from T20 and the click and `aria-activedescendant` behavior from T22 (see their **E2E** lines).
 - **Acceptance:** `bun run test:e2e -- tree` passes three times in a row locally (`--repeat-each=3`).
 
 ### T27: E2E: filters + selection clearing
@@ -592,7 +601,8 @@ flowchart TD
   - category toggles combine;
   - an invalid range shows the field error and leaves the tree unchanged;
   - Reset restores browse expansion;
-  - D3: a selected file that stops matching clears the preview and is announced, while a file that keeps matching stays selected.
+  - D3: a selected file that stops matching clears the preview and is announced, while a file that keeps matching stays selected;
+  - Enter applies the filters without waiting for the debounce, and the status line shows `Showing X of Y files` (T24's **E2E** line).
 - **Acceptance:** passes with `--repeat-each=3`.
 
 ### T28: E2E: preview
@@ -603,7 +613,8 @@ flowchart TD
 - **Change:** specs:
   - selecting one file of each category renders the matching element (img, audio, video, iframe) with its name, size and category;
   - a broken URL shows the fallback and the "Open file" link;
-  - switching files keeps the folder expansion.
+  - switching files keeps the folder expansion;
+  - a loading state shows while the file detail loads (T23's **E2E** line).
 
   Media requests are stubbed with `page.route` so the tests don't depend on the network.
 - **Acceptance:** passes with `--repeat-each=3`.
@@ -619,6 +630,7 @@ flowchart TD
   - `CreateNodeDialog` has the fields name, category, size (MB) and preview URL (optional, defaulting to a verified sample for the category). It validates on the client and shows API `conflict`/`validation` errors on the fields.
   - On success, focus returns to the tree with the new node active and scrolled into view.
 - **Acceptance:** component tests cover the validation and the conflict error. An E2E spec creates a folder inside "Brand system" and a file inside it, and both appear in sorted position with the counts updated.
+- **E2E:** besides the create flow above, `e2e/crud.e2e.ts` covers a duplicate name showing the `conflict` error on the name field, and focus returning to the new row. Passes with `--repeat-each=3`.
 
 ### T30: CRUD: delete UI
 
@@ -630,6 +642,7 @@ flowchart TD
   - A "Delete" button (disabled with no active row) and the Delete key both open an `AlertDialog` naming the node and its descendant file count.
   - Confirming calls `mutations.deleteNode`. Focus then moves to the next row, or the previous one. The preview clears if the selected file was in the subtree.
 - **Acceptance:** component test for the dialog copy and the confirm/cancel paths. E2E: deleting a folder that contains the selected file removes the rows, clears the preview and moves focus to the neighbouring row.
+- **E2E:** besides the flow above, `e2e/crud.e2e.ts` covers the Delete key opening the dialog and Cancel leaving the tree unchanged. Passes with `--repeat-each=3`.
 
 ---
 
