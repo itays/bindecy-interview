@@ -86,7 +86,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: >-
             pages deploy build/client
-            --project-name=bindecy-interview
+            --project-name=file-explorer-task
             --branch=${{ github.head_ref || 'main' }}
             --commit-hash=${{ github.event.pull_request.head.sha || github.sha }}
 

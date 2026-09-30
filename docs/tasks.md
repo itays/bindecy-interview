@@ -868,14 +868,14 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 - **Change:**
   1. **Cleanup.** Delete `Dockerfile` and `.dockerignore`: the Dockerfile runs `npm ci` without a `package-lock.json`, and its final stage omits the dev dependency `vite` that `start` needs. `git mv` the brief, `plan.md`, `tasks.md` and `show-me-refactor-plan.html` into `docs/`. Their links to each other are relative, so they keep working. Point the README's `plan.md` link at `docs/plan.md`.
   2. **One-time Cloudflare setup (repo owner, manual).**
-     - Create a Pages project for Direct Upload: `bunx wrangler pages project create bindecy-interview --production-branch=main`. If the name is taken, the `*.pages.dev` subdomain gets a suffix; use the URL that Cloudflare reports.
+     - Create a Pages project for Direct Upload: `bunx wrangler pages project create file-explorer-task --production-branch=main`. If the name is taken, the `*.pages.dev` subdomain gets a suffix; use the URL that Cloudflare reports.
      - Create an API token with the *Account › Cloudflare Pages › Edit* permission.
      - Store the token and the account ID as the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (`gh secret set`).
 
      The task is `blocked` until the secrets exist.
   3. **Deploy job** in `ci.yml`:
      - `checks` uploads `build/client` as an artifact after the Build step, so the deploy ships the exact build that passed the gates.
-     - A `deploy` job with `needs: checks` downloads the artifact and runs `cloudflare/wrangler-action@v3` with `pages deploy build/client --project-name=bindecy-interview --branch=<branch>`. Pushes to `main` deploy to production (`--branch=main`); same-repo PRs get a preview deploy (`--branch=${{ github.head_ref }}`). PRs from forks skip the job, since they have no secrets.
+     - A `deploy` job with `needs: checks` downloads the artifact and runs `cloudflare/wrangler-action@v3` with `pages deploy build/client --project-name=file-explorer-task --branch=<branch>`. Pushes to `main` deploy to production (`--branch=main`); same-repo PRs get a preview deploy (`--branch=${{ github.head_ref }}`). PRs from forks skip the job, since they have no secrets.
      - Write the `deployment-url` output to the job summary.
      - Don't add `wrangler` to `package.json`; the action installs it.
 
@@ -894,7 +894,8 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
   - `actionlint` reports no findings. Gates: format, typecheck, test, build.
 - **Outcome (so far):**
   - Cleanup: `Dockerfile` and `.dockerignore` are deleted, the four documents are `git mv`'d into `docs/` (their relative links still resolve), and the README links `docs/plan.md`.
-  - Deploy job: `checks` uploads `build/client` as the `client-build` artifact (1-day retention) right after Build. `deploy` (`needs: checks`) runs on pushes and on same-repo PRs, downloads the artifact and runs `pages deploy build/client --project-name=bindecy-interview --branch=${{ github.head_ref || 'main' }} --commit-hash=…`, then writes `deployment-url` and the branch alias to the job summary. It uses `cloudflare/wrangler-action@v4` and `actions/download-artifact@v8`, the current majors (deviation from `@v3`: v4 only changes the default Wrangler to v4). The action runs `command` through `@actions/exec`, not a shell, so a branch name can't inject a command.
+  - Deploy job: `checks` uploads `build/client` as the `client-build` artifact (1-day retention) right after Build. `deploy` (`needs: checks`) runs on pushes and on same-repo PRs, downloads the artifact and runs `pages deploy build/client --project-name=file-explorer-task --branch=${{ github.head_ref || 'main' }} --commit-hash=…`, then writes `deployment-url` and the branch alias to the job summary. It uses `cloudflare/wrangler-action@v4` and `actions/download-artifact@v8`, the current majors (deviation from `@v3`: v4 only changes the default Wrangler to v4). The action runs `command` through `@actions/exec`, not a shell, so a branch name can't inject a command.
   - Screenshots: `scripts/capture-screenshots.ts <baseURL>` captures the three PNGs in light mode with reduced motion, waiting until the preview's loading status is gone and no "preview unavailable" fallback shows. Sizes: `explorer-desktop.png` 233 KB, `filter-active.png` 77 KB (name filter `interview`, `arden-interview.mp3` previewed), `mobile.png` 105 KB (the stacked layout scrolled to the tree card, `primary-mark.png` selected).
   - Checks: `actionlint` 1.7.12 reports no findings; format, typecheck, 481 unit tests (22 files) and build pass.
-  - Blocked on step 2: `wrangler` isn't logged in on this machine and the repo has no Cloudflare secrets. After the owner creates the Pages project and sets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, what's left is the first deploy run, checking the production and preview URLs, and `gh repo edit --homepage`.
+  - Pages project (deviation): named `file-explorer-task` instead of `bindecy-interview`, so production is `https://file-explorer-task.pages.dev`; `ci.yml` and step 2 above use that name.
+  - Blocked on the rest of step 2: the repo has no `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` secret yet. Once they're set, what's left is the first deploy run, checking the production and preview URLs, and `gh repo edit --homepage`.
