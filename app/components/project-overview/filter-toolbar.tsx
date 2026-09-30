@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { memo, useState } from "react"
 import {
   HeadphonesIcon,
   ImageIcon,
@@ -48,6 +48,66 @@ function isFilterCategory(value: string): value is "audio" | "video" | "image" {
   return value === "audio" || value === "video" || value === "image"
 }
 
+function SizeFilterField({
+  id,
+  label,
+  value,
+  error,
+  onBlur,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: string
+  error: string | null
+  onBlur: () => void
+  onChange: (value: string) => void
+}) {
+  return (
+    <Field data-invalid={!!error || undefined}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        name={id}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        min="0"
+        pattern={sizePattern}
+        placeholder="Any"
+        value={value}
+        aria-invalid={!!error || undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : null}
+    </Field>
+  )
+}
+
+const ResultAnnouncement = memo(
+  function ResultAnnouncement({
+    id,
+    message,
+  }: {
+    id: number
+    message: string
+  }) {
+    return (
+      <span
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span key={id}>{message}</span>
+      </span>
+    )
+  },
+  (previous, next) => previous.id === next.id
+)
+
 export function FilterToolbar({
   filters,
   validation,
@@ -74,23 +134,11 @@ export function FilterToolbar({
       : hasActiveFilters
         ? `Showing ${resultCount} of ${totalFileCount} files.`
         : `Showing all ${totalFileCount} files.`
-  const [announcement, setAnnouncement] = useState({
-    id: 0,
-    message: statusMessage,
-  })
-  const [announceOnNextResult, setAnnounceOnNextResult] = useState(false)
+  const [announcementId, setAnnouncementId] = useState(0)
 
-  useEffect(() => {
-    if (!announceOnNextResult) {
-      return
-    }
-
-    setAnnouncement((currentAnnouncement) => ({
-      id: currentAnnouncement.id + 1,
-      message: statusMessage,
-    }))
-    setAnnounceOnNextResult(false)
-  }, [announceOnNextResult, statusMessage])
+  function requestAnnouncement() {
+    setAnnouncementId((currentId) => currentId + 1)
+  }
 
   function updateFilter<Key extends keyof FileFilters>(
     key: Key,
@@ -105,17 +153,17 @@ export function FilterToolbar({
         ? { minSizeMb: true, maxSizeMb: true }
         : { ...currentFields, [field]: true }
     )
-    setAnnounceOnNextResult(true)
+    requestAnnouncement()
   }
 
   function commitFilterFeedback() {
     setTouchedSizeFields({ minSizeMb: true, maxSizeMb: true })
-    setAnnounceOnNextResult(true)
+    requestAnnouncement()
   }
 
   function resetFilters() {
     setTouchedSizeFields({ minSizeMb: false, maxSizeMb: false })
-    setAnnounceOnNextResult(true)
+    requestAnnouncement()
     onReset()
   }
 
@@ -164,74 +212,40 @@ export function FilterToolbar({
                 autoComplete="off"
                 placeholder="Search project files"
                 value={filters.query}
-                onBlur={() => setAnnounceOnNextResult(true)}
+                onBlur={requestAnnouncement}
                 onChange={(event) => updateFilter("query", event.target.value)}
               />
             </Field>
 
-            <Field data-invalid={showMinimumError || undefined}>
-              <FieldLabel htmlFor="minimum-size">Minimum size (MB)</FieldLabel>
-              <Input
-                id="minimum-size"
-                name="minimum-size"
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                min="0"
-                pattern={sizePattern}
-                placeholder="Any"
-                value={filters.minSizeMb}
-                aria-invalid={showMinimumError || undefined}
-                aria-describedby={
-                  showMinimumError ? "minimum-size-error" : undefined
-                }
-                onBlur={() => markSizeFieldTouched("minSizeMb")}
-                onChange={(event) => {
-                  setTouchedSizeFields({
-                    minSizeMb: false,
-                    maxSizeMb: false,
-                  })
-                  updateFilter("minSizeMb", event.target.value)
-                }}
-              />
-              {showMinimumError ? (
-                <FieldError id="minimum-size-error">
-                  {validation.minSizeError}
-                </FieldError>
-              ) : null}
-            </Field>
+            <SizeFilterField
+              id="minimum-size"
+              label="Minimum size (MB)"
+              value={filters.minSizeMb}
+              error={showMinimumError ? validation.minSizeError : null}
+              onBlur={() => markSizeFieldTouched("minSizeMb")}
+              onChange={(value) => {
+                setTouchedSizeFields({
+                  minSizeMb: false,
+                  maxSizeMb: false,
+                })
+                updateFilter("minSizeMb", value)
+              }}
+            />
 
-            <Field data-invalid={showMaximumError || undefined}>
-              <FieldLabel htmlFor="maximum-size">Maximum size (MB)</FieldLabel>
-              <Input
-                id="maximum-size"
-                name="maximum-size"
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                min="0"
-                pattern={sizePattern}
-                placeholder="Any"
-                value={filters.maxSizeMb}
-                aria-invalid={showMaximumError || undefined}
-                aria-describedby={
-                  showMaximumError ? "maximum-size-error" : undefined
-                }
-                onBlur={() => markSizeFieldTouched("maxSizeMb")}
-                onChange={(event) => {
-                  setTouchedSizeFields({
-                    minSizeMb: false,
-                    maxSizeMb: false,
-                  })
-                  updateFilter("maxSizeMb", event.target.value)
-                }}
-              />
-              {showMaximumError ? (
-                <FieldError id="maximum-size-error">
-                  {validation.maxSizeError}
-                </FieldError>
-              ) : null}
-            </Field>
+            <SizeFilterField
+              id="maximum-size"
+              label="Maximum size (MB)"
+              value={filters.maxSizeMb}
+              error={showMaximumError ? validation.maxSizeError : null}
+              onBlur={() => markSizeFieldTouched("maxSizeMb")}
+              onChange={(value) => {
+                setTouchedSizeFields({
+                  minSizeMb: false,
+                  maxSizeMb: false,
+                })
+                updateFilter("maxSizeMb", value)
+              }}
+            />
 
             <FieldSet className="gap-2 sm:col-span-2 lg:col-span-1">
               <FieldLegend variant="label">File type</FieldLegend>
@@ -247,7 +261,7 @@ export function FilterToolbar({
                     "categories",
                     categories.filter(isFilterCategory)
                   )
-                  setAnnounceOnNextResult(true)
+                  requestAnnouncement()
                 }}
               >
                 <ToggleGroupItem value="audio" aria-label="Audio files">
@@ -268,14 +282,7 @@ export function FilterToolbar({
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
             <p className="text-sm text-muted-foreground">{statusMessage}</p>
-            <span
-              className="sr-only"
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              <span key={announcement.id}>{announcement.message}</span>
-            </span>
+            <ResultAnnouncement id={announcementId} message={statusMessage} />
             <Button
               type="button"
               variant="outline"

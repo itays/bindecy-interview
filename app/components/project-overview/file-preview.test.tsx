@@ -47,8 +47,8 @@ describe("FilePreview", () => {
       screen.getByRole("heading", { level: 2, name: "asset.image" })
     ).toBeInTheDocument()
     expect(screen.getByText("1 MB")).toBeInTheDocument()
-    expect(screen.getAllByRole("button", { name: "Open file" })).toHaveLength(2)
-    for (const openFile of screen.getAllByRole("button", {
+    expect(screen.getAllByRole("link", { name: "Open file" })).toHaveLength(2)
+    for (const openFile of screen.getAllByRole("link", {
       name: "Open file",
     })) {
       expect(openFile).toHaveAttribute(
@@ -77,7 +77,7 @@ describe("FilePreview", () => {
   it("embeds documents with a titled frame and safe fallback link", () => {
     render(<FilePreview location={makeLocation("doc")} />)
     const frame = screen.getByTitle("Preview of asset.doc")
-    const openFile = screen.getByRole("button", { name: "Open file" })
+    const openFile = screen.getByRole("link", { name: "Open file" })
 
     expect(frame).toHaveAttribute("sandbox", "")
     expect(openFile.tagName).toBe("A")
@@ -95,7 +95,7 @@ describe("FilePreview", () => {
       screen.getByText(/does not have a supported HTTP preview URL/i)
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole("button", { name: "Open file" })
+      screen.queryByRole("link", { name: "Open file" })
     ).not.toBeInTheDocument()
   })
 })

@@ -9,6 +9,7 @@ import {
 
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import { buttonVariants } from "~/components/ui/button-variants"
 import {
   Card,
   CardAction,
@@ -61,13 +62,15 @@ function getHttpPreviewUrl(previewUrl: string) {
 
 function OpenFileButton({ url }: { url: string }) {
   return (
-    <Button
-      nativeButton={false}
-      render={<a href={url} target="_blank" rel="noopener noreferrer" />}
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={buttonVariants()}
     >
       <ExternalLinkIcon data-icon="inline-start" aria-hidden="true" />
       Open file
-    </Button>
+    </a>
   )
 }
 
