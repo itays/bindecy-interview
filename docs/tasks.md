@@ -154,7 +154,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 | T30 | CRUD: delete UI | 5 | T29 | W12 | done |
 | T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | dropped |
 | T32 | README + scaling write-up | 6 | T33 | W14 | todo |
-| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | todo |
+| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | blocked |
 
 ---
 
@@ -861,7 +861,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 
 ### T33: Handover: cleanup, Cloudflare deploy, screenshots
 
-- **Status:** todo
+- **Status:** blocked
 - **Depends on:** T30
 - **Read first:** `.github/workflows/ci.yml`, `react-router.config.ts`, `playwright.config.ts`, the current `cloudflare/wrangler-action` and Cloudflare Pages "Direct Upload" docs.
 - **Touch:** `Dockerfile`, `.dockerignore`, `bindecy-task.md`, `plan.md`, `tasks.md`, `show-me-refactor-plan.html` (all moved into `docs/`), `README.md` (the `plan.md` link only), `.github/workflows/ci.yml`, `scripts/capture-screenshots.ts`, `docs/images/*`.
@@ -892,3 +892,9 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
   - The repo homepage points at the production URL.
   - `docs/images/` holds the 3 screenshots, and the script regenerates them.
   - `actionlint` reports no findings. Gates: format, typecheck, test, build.
+- **Outcome (so far):**
+  - Cleanup: `Dockerfile` and `.dockerignore` are deleted, the four documents are `git mv`'d into `docs/` (their relative links still resolve), and the README links `docs/plan.md`.
+  - Deploy job: `checks` uploads `build/client` as the `client-build` artifact (1-day retention) right after Build. `deploy` (`needs: checks`) runs on pushes and on same-repo PRs, downloads the artifact and runs `pages deploy build/client --project-name=bindecy-interview --branch=${{ github.head_ref || 'main' }} --commit-hash=…`, then writes `deployment-url` and the branch alias to the job summary. It uses `cloudflare/wrangler-action@v4` and `actions/download-artifact@v8`, the current majors (deviation from `@v3`: v4 only changes the default Wrangler to v4). The action runs `command` through `@actions/exec`, not a shell, so a branch name can't inject a command.
+  - Screenshots: `scripts/capture-screenshots.ts <baseURL>` captures the three PNGs in light mode with reduced motion, waiting until the preview's loading status is gone and no "preview unavailable" fallback shows. Sizes: `explorer-desktop.png` 233 KB, `filter-active.png` 77 KB (name filter `interview`, `arden-interview.mp3` previewed), `mobile.png` 105 KB (the stacked layout scrolled to the tree card, `primary-mark.png` selected).
+  - Checks: `actionlint` 1.7.12 reports no findings; format, typecheck, 481 unit tests (22 files) and build pass.
+  - Blocked on step 2: `wrangler` isn't logged in on this machine and the repo has no Cloudflare secrets. After the owner creates the Pages project and sets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, what's left is the first deploy run, checking the production and preview URLs, and `gh repo edit --homepage`.
