@@ -148,10 +148,10 @@ flowchart TD
 | T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | done |
 | T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | done |
 | T25 | Page cutover + delete old code | 5 | T22, T23, T24 | W10 | done |
-| T26 | E2E: tree | 5 | T25 | W11 | todo |
-| T27 | E2E: filters + selection clearing | 5 | T25 | W11 | todo |
-| T28 | E2E: preview | 5 | T25 | W11 | todo |
-| T29 | CRUD: create UI | 5 | T25 | W11 | todo |
+| T26 | E2E: tree | 5 | T25 | W11 | done |
+| T27 | E2E: filters + selection clearing | 5 | T25 | W11 | done |
+| T28 | E2E: preview | 5 | T25 | W11 | done |
+| T29 | CRUD: create UI | 5 | T25 | W11 | done |
 | T30 | CRUD: delete UI | 5 | T29 | W12 | todo |
 | T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | todo |
 | T32 | README + scaling write-up | 6 | T31 | W14 | todo |
@@ -697,7 +697,7 @@ flowchart TD
 
 ### T26: E2E: tree
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T25
 - **Touch:** `e2e/tree.e2e.ts`.
 - **Change:** specs using `?seed=1&latency=50`:
@@ -707,10 +707,21 @@ flowchart TD
   - `?failFirst=1` makes the root listing on mount fail, which shows an error row; Retry then loads the root folders;
   - the row states from T20 and the click and `aria-activedescendant` behavior from T22 (see their **E2E** lines).
 - **Acceptance:** `bun run test:e2e -- tree` passes three times in a row locally (`--repeat-each=3`).
+- **Outcome:**
+  - `e2e/tree.e2e.ts` has 6 specs on `?seed=1&latency=50`, in the smoke spec's style (external requests aborted, web-first assertions, no page errors). Status rows are located with `[id="tree-row-status:<folderKey>"]`, since `#id` can't hold the colon.
+  - Transient rows are observed with Playwright's page clock instead of waits: `page.clock.install()` before `goto`, then `pauseAt` so the mock's latency timers fire only on `clock.runFor`.
+  - Loading row: expanding "Brand system" shows `status:folder-brand` ("Loading…", `aria-level` 2) and no children; after `runFor(100)` it's gone and Logos and "brand-guidelines.pdf 4.6 MB Document" appear.
+  - Row ARIA (T20): the 5 top-level rows in order with their names ("Asset library (9,413 files)", "Brand system (3 files)"), `aria-level`, `aria-posinset` 2 of 5, `aria-expanded` only on folders, `aria-selected` only on files (false, then true after a click).
+  - Clicks (T22): a folder toggles both ways, a file is selected and the previous one deselected, `aria-activedescendant` follows each click, the tree keeps focus, and the preview shows the heading and path.
+  - Keyboard (T21/T22): focus makes Asset library active; Down; Right expands; Right moves to `status:folder-brand`, then to Logos when the page lands; Down reaches `brand-guidelines.pdf`; Left goes from the nested file to its parent, Left again collapses; Enter and Space toggle the folder; Enter selects a file; End then Space selects `project-brief.pdf`; Up, Home, and Up on the first row (no move).
+  - Paging and the DOM bound: the spec scrolls the viewport until Stock footage exists, opens it (first file `file-g26`, `clip-00001.mp4`), shows that the off-screen load-more row requests nothing during 2 s of mock time, then scrolls to it ("Loading more… 100 of 5,000") and sees the next page land (`clip-00384.mp4` at `aria-posinset` 101). It keeps scrolling until 1,000+ files are loaded, freezes the clock and scrolls to row 1,000 (`clip-03702.mp4`, posinset 1000 of 5000): at most 100 `treeitem`s are in the DOM, `file-g26` is unmounted and the active Stock footage row is still mounted. A busy machine can land more than one page per scroll, so it polls for "at least 1,000" rather than an exact page.
+  - Error row: `?failFirst=1` shows only `status:root` "Couldn't load project files"; Retry has `tabindex="-1"`; focusing the tree makes the error row active; clicking Retry loads the 5 top-level rows and keeps focus on the tree.
+  - No app bugs found.
+  - Gates: format, typecheck, 461 unit tests (20 files) and `test:e2e` (7 passed, port 5226; `--repeat-each=3` passed with `CI` unset, so without retries). The paging spec also passed 16/16 at 8 workers. React Doctor reports no issues.
 
 ### T27: E2E: filters + selection clearing
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T25
 - **Touch:** `e2e/filters.e2e.ts`.
 - **Change:** specs:
@@ -721,10 +732,20 @@ flowchart TD
   - D3: a selected file that stops matching clears the preview and is announced, while a file that keeps matching stays selected;
   - Enter applies the filters without waiting for the debounce, and the status line shows `Showing X of Y files` (T24's **E2E** line).
 - **Acceptance:** passes with `--repeat-each=3`.
+- **Outcome:**
+  - `e2e/filters.e2e.ts` has 7 specs on `?latency=0`, so the mock uses no timers and the toolbar's 250 ms debounce is the only one left. The status texts are read inside the toolbar's form (`form.locator("p")` for the line, `form.getByRole("status")` for the live region): a bare `page.getByRole("status")` also matches the preview's "Loading file details…" while a file loads. The badges are found by their card's title.
+  - Name and reveal: `wordmark` gives "Showing 1 of 9,423 files." in the line and the live region, "1 of 9,423 files" and "1 matching file" in the badges, and Brand system, Logos and Archive expanded with exactly 4 rows; a name with no match shows the empty state.
+  - Toggles (`aria-pressed`): Audio 1,492, Audio + Image 3,628, Image 2,136, all three 8,552 files; Audio plus the name `launch` leaves only `launch-score.mp3`.
+  - Invalid range: minimum 10 and maximum 5 show "Fix the size filters…" and "Filters paused", and after blur the maximum field has `aria-invalid` and the error as its description; the tree is unchanged after `clock.runFor(250)`, and fixing the range applies it.
+  - Reset brings back the browse expansion (Brand system expanded again, Launch campaign collapsed, 7 rows) and disables itself.
+  - D3: `project-brief.pdf` selected, then `guidelines`, clears the preview ("Select a file to preview") and announces the deselection (the notice region is found by its text); Reset doesn't restore the selection. A file that keeps matching through its folder (`system` matches only the Brand system folder) stays selected; `logos` then deselects and announces it.
+  - Debounce vs Enter: the page clock is installed before `goto` and paused after load. Typing isn't applied at 249 ms and is at 250 ms; `brand` isn't applied before Enter, and Enter shows "Showing 3 of 9,423 files." with the clock still paused.
+  - No app bugs found.
+  - Gates: format, typecheck, 461 unit tests (20 files) and `test:e2e` (8 passed, port 5227; `--repeat-each=3` passed with `CI` unset). React Doctor reports no issues.
 
 ### T28: E2E: preview
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T25
 - **Touch:** `e2e/preview.e2e.ts`.
 - **Change:** specs:
@@ -735,10 +756,20 @@ flowchart TD
 
   Media requests are stubbed with `page.route` so the tests don't depend on the network.
 - **Acceptance:** passes with `--repeat-each=3`.
+- **Outcome:**
+  - `e2e/preview.e2e.ts` has 4 specs. Every external request is aborted first; then the fixture's image URLs get a 1×1 PNG, the audio and video URLs a generated 0.1 s silent WAV, and the PDF URL a small HTML page. The preview is the card titled "Preview".
+  - Categories: `primary-mark.png` (Image, 1.5 MB, "Brand system / Logos"), `launch-score.mp3` (Audio, 3 MB), `launch-film-final.mp4` (Video, 18 MB, both in "Launch campaign / Film") and `project-brief.pdf` (Document, 512 KB, top level). Each checks the heading, path, badge, the `category·size` line, the `img`/`audio`/`video`/`iframe` element with the stubbed `src`, that the loading overlay is gone, and the document's "Open file" link.
+  - Broken URL: image, audio and video URLs answer 404; each shows its "… preview unavailable" fallback and description, and the fallback's "Open file" link (`href`, `target="_blank"`, `rel="noopener noreferrer"`), with no media element. The spec covers audio and video too (deviation, more than one case): Chromium fires the error on `<source>`, and React's `onError` still reaches the fallback.
+  - Documents have no broken-URL case: a 404 still loads into the iframe and fires `load`, so there's no error to show.
+  - Switching files keeps Brand system, Launch campaign and Film expanded and Logos, Photography selects and Research collapsed across three selections, with exactly one selected row.
+  - Loading (T23): at `?latency=1500` the preview shows "Loading file details…" (`role="status"`, scoped to the preview card) and the "Loading" badge with no heading, then the heading, "Document" badge and iframe replace them.
+  - Not asserted: that a re-selected file shows no loading state (the detail cache). Proving a transient state never appears needs timing checks.
+  - No app bugs found.
+  - Gates: format, typecheck, 461 unit tests (20 files) and `test:e2e` (5 passed, port 5228; `--repeat-each=3` passed with `CI` unset, and `--repeat-each=10` passed 40/40). React Doctor reports no issues.
 
 ### T29: CRUD: create UI
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T25
 - **Read first:** `plan.md` §CRUD UX, `ui/tree/tree-panel.tsx`, `state/mutations.ts`, the T04 dialog and select components.
 - **Touch:** `app/features/file-explorer/ui/tree/tree-actions.tsx`, `ui/crud/create-node-dialog.tsx`, `create-node-dialog.test.tsx`, `ui/tree/tree-panel.tsx` (the header slot only), `e2e/crud.e2e.ts`.
@@ -748,6 +779,20 @@ flowchart TD
   - On success, focus returns to the tree with the new node active and scrolled into view.
 - **Acceptance:** component tests cover the validation and the conflict error. An E2E spec creates a folder inside "Brand system" and a file inside it, and both appear in sorted position with the counts updated.
 - **E2E:** besides the create flow above, `e2e/crud.e2e.ts` covers a duplicate name showing the `conflict` error on the name field, and focus returning to the new row. Passes with `--repeat-each=3`.
+- **Outcome:**
+  - `ui/tree/tree-actions.tsx` exports `TreeActions`: "New folder" and "New file" as outline icon buttons (`icon-sm`, named by `aria-label` and `title`) before the count badge. Icon-only (deviation) so the 352 px header keeps its layout: at 1280×900 and 390×844 the card, header (83 px) and tree boxes match `main`, the description still takes two lines, and nothing overflows.
+  - The parent is resolved when the dialog opens: the active folder, the active file's parent, the folder of an active status row (found in the visible rows), or the top level when no row is active.
+  - `TreePanel` renders `<TreeActions />` in its header slot. Its `actions` prop is removed: nothing passed it. The `contain-size` class and its comment are unchanged.
+  - `ui/crud/create-node-dialog.tsx` exports `CreateNodeDialog({ kind, parentId, open, onOpenChange, onCreated, finalFocus })` and `CreateNodeKind`. The title is "New folder" or "New file"; the description names the target ("Adds a folder to Brand system.", "Adds a file at the top level."). The form mounts only while the dialog is open, so each opening starts empty.
+  - Fields: Name, plus Category (native select, "Document" first selected, labels from `fileCategoryDetails`), Size (MB) and Preview URL (optional) for a file. They're checked on submit: "Enter a name."; "Enter a size in megabytes." for a blank size, otherwise `parseSizeInMb`'s messages, rounded to whole bytes, and "Enter a smaller size." past a safe integer; an absolute `http:`/`https:` URL or "Enter a URL that starts with http:// or https://.". The first invalid field takes focus, and editing a field clears its error. Errors use `data-invalid`, `aria-invalid` and `aria-describedby`, as in the toolbar.
+  - A blank preview URL takes `PREVIEW_URLS[category][0]`, the mock's verified pool, so there's no second list of sample URLs.
+  - API errors: `conflict` shows its message on the name field ("logos already exists") and focuses it. Other errors show below the fields as an alert (deviation): the error code doesn't say which field a `validation` error is about, and the client checks already cover the API's name and size rules.
+  - Submitting first awaits `loader.ensureChildren(parentId)`, which resolves at once for a loaded listing. So T18 inserts the node into a loaded listing, and its row exists when the dialog closes; without it, creating inside a folder that was never opened (such as a new one) left no row to focus. While the request runs the button reads "Creating…" and repeat submits are ignored.
+  - Focus: on success `TreeActions` keeps the new id and closes the dialog. Base UI's `finalFocus` then scrolls the new row into view (`scrollIntoView({ block: "nearest" })`; the active row is always rendered, T22) and returns the tree container. After Cancel, or when the node has no visible row (hidden by the filters, or past the loaded pages of a large folder), focus returns to the button.
+  - For T30: `TreeActions` owns the dialog state, so "Delete" joins it there, and the same `finalFocus` pattern can move focus to the neighbouring row.
+  - Tests: `create-node-dialog.test.tsx` (12) covers the descriptions, a blank name, three size errors, two URL errors, a duplicate name on the name field followed by a successful rename (trimmed, new node active), a file sent in bytes with the category's sample URL (and selected), a given URL trimmed, and a `not-found` error as a form alert.
+  - E2E: `e2e/crud.e2e.ts` (3). Drafts created in Brand system sorts first (posinset 1 of 3, before Logos and `brand-guidelines.pdf`), is the active row of the focused tree and is in view. `notes.pdf` created in Drafts expands it, is selected at level 3 with its preview, and the counts follow: "Drafts (1 file)", "Brand system (4 files)", "Showing all 9,424 files." and the 9,424 badge. `overview.pdf` in Asset library sorts after its 27 folders (posinset 28) and is scrolled into view; without the `scrollIntoView` call this spec fails (viewport ratio 0). "LOGOS" shows the conflict on the focused name field, and Cancel returns focus to the button with the tree unchanged.
+  - Gates: format, typecheck, 473 unit tests (21 files), build and `test:e2e` (4 passed, port 5229; `crud --repeat-each=3` 9 passed, `CI` unset). React Doctor reports no issues after a test helper that called a prop during render became a store probe.
 
 ### T30: CRUD: delete UI
 
