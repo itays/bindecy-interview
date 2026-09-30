@@ -34,6 +34,14 @@ export type Listing = {
   error: string | null
 }
 
+/** File counts for the header badge; `null` until loaded. */
+export type ExplorerStats = {
+  /** Files in the whole tree. */
+  total: number | null
+  /** Files matching the applied query; `null` when unfiltered or not loaded yet. */
+  filtered: number | null
+}
+
 export type ExplorerState = {
   nodesById: Map<string, NodeSummary>
   /** `listings[queryKey][folderKey(folderId)]`. */
@@ -48,6 +56,7 @@ export type ExplorerState = {
   activeId: string | null
   /** Latest message for a polite live region. */
   announcement: string
+  stats: ExplorerStats
 }
 
 export type ExplorerActions = {
@@ -80,6 +89,8 @@ export type ExplorerActions = {
    * other filtered keys and clears a selected file that no longer matches (D3).
    */
   applyFilters: (query: FileQuery | null) => void
+  /** Merges loaded counts into `stats`. */
+  setStats: (stats: Partial<ExplorerStats>) => void
 }
 
 export type ExplorerStore = ExplorerState & ExplorerActions
@@ -181,6 +192,7 @@ export function createExplorerStore(): ExplorerStoreApi {
     selectedId: null,
     activeId: null,
     announcement: "",
+    stats: { total: null, filtered: null },
 
     receivePage: (key, folderId, page, { append }) =>
       set((state) => {
@@ -270,6 +282,16 @@ export function createExplorerStore(): ExplorerStoreApi {
     setActive: (id) =>
       set((state) => (state.activeId === id ? state : { activeId: id })),
 
+    setStats: (stats) =>
+      set((state) => {
+        const next = { ...state.stats, ...stats }
+
+        return next.total === state.stats.total &&
+          next.filtered === state.stats.filtered
+          ? state
+          : { stats: next }
+      }),
+
     applyFilters: (query) =>
       set((state) => {
         const appliedQuery = query && isQueryActive(query) ? query : null
@@ -291,6 +313,8 @@ export function createExplorerStore(): ExplorerStoreApi {
           appliedQuery,
           listings,
           filterExpanded: {},
+          // The previous query's count must never show under the new one.
+          stats: { ...state.stats, filtered: null },
           ...(stale && {
             selectedId: null,
             announcement: `${stale.name} doesn't match the filters and was deselected.`,

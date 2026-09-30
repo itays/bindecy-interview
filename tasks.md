@@ -134,13 +134,13 @@ flowchart TD
 | T09 | Task-doc addendum | 1 | T02 | W2 | done |
 | T10 | Seeded generator + curated fixture | 2 | T05 | W3 | done |
 | T11 | Mock DB core | 2 | T07, T10 | W4 | done |
-| T12 | Mock query index | 2 | T06, T11 | W5 | todo |
-| T13 | Mock mutations | 2 | T11 | W5 | todo |
+| T12 | Mock query index | 2 | T06, T11 | W5 | done |
+| T13 | Mock mutations | 2 | T11 | W5 | done |
 | T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | todo |
 | T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | done |
-| T16 | Visible rows (flatten) | 3 | T15 | W5 | todo |
-| T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | todo |
-| T18 | State mutations (CRUD) | 3 | T15 | W5 | todo |
+| T16 | Visible rows (flatten) | 3 | T15 | W5 | done |
+| T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | done |
+| T18 | State mutations (CRUD) | 3 | T15 | W5 | done |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | todo |
 | T20 | Tree row components | 4 | T16, T19 | W8 | todo |
 | T21 | Tree keyboard model | 4 | T16 | W6 | todo |
@@ -380,7 +380,7 @@ flowchart TD
 
 ### T12: Mock query index
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T06, T11
 - **Read first:** `domain/filters.ts`, `api/mock/mock-db.ts`, `app/components/project-overview/file-tree-utils.test.ts` (the semantics cases to port).
 - **Touch:** `app/features/file-explorer/api/mock/mock-query-index.ts`, `mock-query-index.test.ts`.
@@ -392,10 +392,16 @@ flowchart TD
     - `search(query, cursor, limit)` returns hits with `ancestorIds`, in tree order;
     - `stats(query)`.
 - **Acceptance:** the semantics cases from the old `file-tree-utils.test.ts` are ported to the new API and pass. `matchCount` on the ancestors of a deep match is correct. The LRU evicts its oldest entry, and the cache clears on mutation. Paging works over filtered children.
+- **Outcome:**
+  - `mock-query-index.ts` exports `createQueryIndex(db)`. `evaluate(query)` makes one iterative depth-first pass over the sorted `childIds`, O(n) with no ancestor walk per node. It passes the nearest name-matched ancestor down the walk, so `matchesFile` stays the only file-match rule. It returns `matchedFileIds` (an array in tree order, not a Set, because search needs positions), `matchCountByFolder` (folders with at least one match; no `ROOT_ID` entry), `folderNameMatches` and `keptIds` (the `includeIds` for `db.listChildren`). Measured: about 1 ms at 10k nodes and 16 ms at 100k.
+  - The keep rule is the old `filterProjectTree` rule. A folder is kept when its own name matches, when it keeps a child, or when it sits below a name-matched folder and the query has no size or category limit. So a name-matched folder with no matching files is kept with `matchCount` 0. An inactive query keeps every node, but T14 must route an omitted or inactive query to `db.listChildren` (O(log n + limit), no `matchCount`).
+  - An LRU keeps up to 5 evaluations by `queryKey`; a hit refreshes the entry. Any `db.onMutate` event clears the cache, and `dispose()` unsubscribes.
+  - `listChildren(folderId, query, { cursor, limit })` pages the kept children with the `db.listChildren` keyset cursor, costs O(children) per page and throws the same errors. Folders carry `matchCount`. `search(query, { cursor, limit })` returns new `SearchHit`s in tree order; `ancestorIds` run top-level first without the file, ready for `revealFolders`. `total` counts every hit. The search cursor is base64 JSON of the last hit's path of `SortKey`s, found by binary search in pre-order, so creates and deletes between pages never skip or repeat a hit. A bad cursor or limit throws `validation`. `stats(query)` returns the matched file count.
+  - Gates: format, typecheck and 279 unit tests (14 files, after the rebase onto T16 and T13) pass; `mock-query-index.test.ts` has 43 tests. React Doctor reports no issues. A throwaway test (not committed) ran T13 mutations against the index: the cache cleared, and `stats`, `search` ancestors and `matchCount` followed each create and delete.
 
 ### T13: Mock mutations
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T11
 - **Read first:** `api/mock/mock-db.ts`, `domain/sort.ts`.
 - **Touch:** `app/features/file-explorer/api/mock/mock-mutations.ts`, `mock-mutations.test.ts`.
@@ -404,6 +410,13 @@ flowchart TD
   - `deleteNode` removes the subtree, updates the ancestors and returns `deletedIds`.
   - Each operation emits a mutation event.
 - **Acceptance:** tests cover sorted insertion, aggregates after create and delete, subtree deletion ids, the conflict and validation errors, and one emitted event per mutation.
+- **Outcome:**
+  - `mock-mutations.ts` exports `createMockMutations(db)`, with synchronous `createFolder`, `createFile` and `deleteNode` over `db.internal`. Each operation runs all its checks before the first write, so a thrown `ApiError` changes nothing, emits nothing and uses no id. A success emits exactly one `MockMutationEvent`, after the index is consistent.
+  - Create trims the name. It throws `validation` for a blank name, a file parent, or a size that isn't a non-negative safe integer (0 is allowed). It throws `not-found` for an unknown parent or the literal `ROOT_ID` (the top level is `null`), and `conflict` when a sibling folder or file has the same lowercased name. The conflict check is one binary search per rank plus a scan of the names that collate equal. New ids are `folder-new-N` / `file-new-N`: the counters never go back, skip taken ids, never reuse a deleted id and never contain `:`.
+  - Create costs O(depth + siblings): `upperBound` gives the slot and a splice inserts the id. A new folder gets an empty `childIds` entry and a `fileCounts` of 0; a new file adds 1 to every ancestor and to `ROOT_ID`. It returns `toSummary(record)` (no `previewUrl`; `getNode` has it).
+  - `deleteNode` costs O(subtree + depth + siblings). An iterative DFS collects `deletedIds`: the node first, then its descendants in pre-order. The node leaves its parent at `upperBound(key) - 1`, not through `indexOf`. The subtree's file count comes off every ancestor and `ROOT_ID`, and all four index maps drop each deleted id. It throws `validation` for `ROOT_ID` and `not-found` for an unknown id. The event and the return value share one `deletedIds` array, so listeners must not change it.
+  - For T14: wrap the sync calls in promises and reject with the same `ApiError`. `onMutate` listeners (the T12 cache clear) run synchronously inside the mutation. A cursor taken before a create or delete still pages over the survivors without gaps or duplicates (tested).
+  - Gates: format, typecheck and 236 unit tests (13 files, after the rebase onto T16) pass; `mock-mutations.test.ts` has 37 tests. React Doctor reports no issues.
 
 ### T14: Mock API adapter + URL config
 
@@ -414,6 +427,7 @@ flowchart TD
 - **Change:**
   - `createMockFileExplorerApi(config)` implements `FileExplorerApi` on top of the DB, the query index and the mutations.
   - Latency uses jitter (±50%) with a seeded RNG, and `latency: 0` resolves on a microtask.
+  - Reads run against the DB after the delay, not when the call starts. So a response reflects every mutation that finished while it was in flight; T18 relies on this for a first page that is still loading during a create.
   - An `AbortSignal` rejects with a `DOMException('AbortError')`, both before and during the delay.
   - `failRate` rejects reads with `ApiError('network')` at random (seeded). `failFirst=N` rejects the first N `listChildren` calls, then succeeds.
   - `parseMockConfig(searchParams)` reads `seed`, `nodes`, `latency`, `failRate` and `failFirst`, with defaults 1 / 10000 / 250 / 0 / 0, clamped to sane ranges.
@@ -447,7 +461,7 @@ flowchart TD
 
 ### T16: Visible rows (flatten)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T15
 - **Read first:** `state/explorer-store.ts` (state type and selectors only).
 - **Touch:** `app/features/file-explorer/state/visible-rows.ts`, `visible-rows.test.ts`.
@@ -456,13 +470,20 @@ flowchart TD
   - It walks the root listing for the current `queryKey`. An expanded folder with a listing recurses; one without a listing gets a `loading` row; an error gets an `error` row; a `nextCursor` adds a trailing `load-more` row.
   - Export `ROW_HEIGHT = { folder: 34, file: 50, status: 34 }` and `rowHeight(row, state)`.
 - **Acceptance:** tests cover collapsed and expanded nesting, the status row for each state, `posinset`/`setsize` using `total`, filtered vs browse `queryKey`, and a stable key per row. The work is O(visible) (no traversal of collapsed subtrees; checked with a spy or a big collapsed fixture).
+- **Outcome:**
+  - `flattenVisibleRows(state)` is a pure walk from the root listing of `currentQueryKey(state)`. It returns `Row = NodeRow | LoadingRow | LoadMoreRow | ErrorRow`, a union on `kind`. Every row has `key`, `folderId` (`null` = top level) and `depth` (0 = top level, so `aria-level = depth + 1`). Node rows add `id`, a 1-based `posinset` and `setsize = listing.total`.
+  - Expansion comes from `expanded` in browse mode and from `filterExpanded[currentKey]` while filtering. A listing has at most one trailing status row at child depth: `loading` (no listing, or the first page is in flight), `error` (with `message`, after the loaded ids; it wins over a cursor, and retry resumes from the kept `nextCursor`), or `load-more` (with `loaded`/`total`) while `nextCursor !== null`. An idle, complete, empty listing has no row.
+  - Keys: a node row uses the node id. A status row uses one slot key per listing, `status:<folderKey>`, so the key survives loading → error → retry. Node ids must never contain `:`.
+  - The cost is O(visible rows): it reads only the listings of visible expanded folders, with one `nodesById.get` and at most one expanded-set lookup per node row. It never reads `matchCount`. A listed id without a `nodesById` entry throws a plain `Error`. `ROW_HEIGHT` and `rowHeight(row, state)` give node heights by type, and 34 px for status rows.
+  - For later tasks: the function returns a new array on each call, so T19 memoizes it on `listings`, `expanded`, `filterExpanded`, `appliedQuery` and `nodesById`. The UI gets an error row's folder name from `nodesById.get(row.folderId)`. `LoadMoreRow` has no status, so T20/T22 call `loader.loadMore` whenever the row is in range and rely on the loader's dedupe.
+  - Gates: format, typecheck and 199 unit tests (12 files) pass; `visible-rows.test.ts` has 25 tests. React Doctor reports no issues.
 
 ### T17: Loader (dedupe, abort, paging, reveal)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T15
 - **Read first:** `api/file-explorer-api.ts`, `state/explorer-store.ts`.
-- **Touch:** `app/features/file-explorer/state/loader.ts`, `loader.test.ts`.
+- **Touch:** `app/features/file-explorer/state/loader.ts`, `loader.test.ts`; additively `state/explorer-store.ts`, `explorer-store.test.ts` (the `stats` field).
 - **Change:** `createLoader(api, store, { pageSize = 100 })` provides:
   - `ensureChildren(folderId)`, `loadMore(folderId)` and `retry(folderId)`. In-flight requests are deduped per `(queryKey, folderId, cursor)`.
   - `applyFilters(query | null)` aborts the previous query's controller, calls `store.applyFilters`, runs `search(limit 50)` and `revealFolders` on the hits' ancestors when active, and refreshes `stats`.
@@ -470,10 +491,17 @@ flowchart TD
 
   Responses whose `queryKey` is no longer current are ignored. `AbortError` is not reported as an error.
 - **Acceptance:** tests (with a fake API that records calls and resolves manually) cover two `ensureChildren` calls producing one request, a filter change aborting the previous requests with the stale result ignored, a `loadMore` cursor chain, a network error setting an error status, retry recovering, and the reveal expanding exactly the ancestors of the hits.
+- **Outcome:**
+  - The store gains `stats: ExplorerStats` (`{ total, filtered }`, both `null` at first) and `setStats(partial)`, which returns the same state when nothing changes. `applyFilters` resets `stats.filtered` to `null` when the key changes, so an old filtered count never shows under a new query.
+  - `createLoader(api, store, { pageSize = 100 })` returns `ensureChildren`, `loadMore`, `retry`, `applyFilters`, `loadStats` and `dispose`. Every method resolves when its store update is done and never rejects. Page requests are deduped per `(queryKey, folderKey, cursor)` while in flight. `ensureChildren` also re-sends an orphaned first page (a `loading` listing with no ids and no request behind it). `retry` re-sends the failed first page, or the failed next page from the kept `nextCursor`.
+  - Aborting (deviation): browse requests and the total count share one lifetime controller that only `dispose()` aborts. A filter change doesn't abort them, because browse listings survive filter changes and would otherwise stay `loading`. Each filtered key has its own controller, aborted with its in-flight entries when the key stops being applied. A response lands only if it is still the registered request for its slot, its key is still live, its folder is still in `nodesById` (not deleted while in flight), and a next page still continues the listing's cursor. So a late result from a superseded query, or from an earlier run of the same query (A→B→A), is dropped, and a deleted folder's page can't bring its nodes back. A first page lands even if a mutation dropped its listing meanwhile, so a mounted loading row can't hang.
+  - Errors: an `AbortError` is never reported. An `ApiError` sets the listing error to its message, and any other failure sets `GENERIC_LOAD_ERROR`. `applyFilters` runs `search({ limit: 50 })` and `getStats({ query })` in parallel and reveals every ancestor id of the hits, deduped (O(hits × depth)). A failed search reveals nothing; a failed count keeps the last value. `loadStats()` loads the total, plus the filtered count while filtering.
+  - For T19: call `loadStats()` on mount and after each create or delete (T18 doesn't change `stats`), and `dispose()` on unmount.
+  - Gates: format, typecheck and 305 unit tests (15 files, after the rebase onto T16, T13 and T12) pass; `loader.test.ts` has 23 tests and `explorer-store.test.ts` has 27. React Doctor reports no issues. A follow-up commit after T18 adds the deleted-folder check and its test (`loader.test.ts`: 24 tests).
 
 ### T18: State mutations (CRUD)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T15
 - **Read first:** `plan.md` §State management (Mutations), `state/explorer-store.ts`, `domain/sort.ts`.
 - **Touch:** `app/features/file-explorer/state/mutations.ts`, `mutations.test.ts`.
@@ -486,6 +514,13 @@ flowchart TD
   - `deleteNode(id)`: after the API call, remove the `deletedIds` from `nodesById` and the listings, fix the counts, clear the selection, active row or expanded entries inside the subtree, and drop the filtered listings.
   - API errors are rethrown to the caller (for the dialogs to show).
 - **Acceptance:** tests cover insertion order, insertion beyond the loaded page, count propagation, delete cleanup of selection and expanded state, filtered listings being dropped, and the error passing through with no state change.
+- **Outcome:**
+  - `createMutations(api, store)` returns `createFolder`, `createFile` and `deleteNode`. Each command awaits the API first. A rejection reaches the caller as the same error instance, and the store state stays the same object. A success is one `store.setState(updater)` with no new store actions; only what changed gets new references.
+  - Create finds the node's position in the parent's loaded browse listing by binary search (O(log n) `compareSortKeys` calls). It inserts when the position is inside the loaded prefix or the listing is complete; past the prefix with more pages pending, it only adds 1 to `total`. It skips a missing listing, a first page still in flight, and a node that a later page already listed. It adds 1 to the parent's `childCount` and, for a file, 1 to `fileCount` on the parent and every loaded ancestor (O(depth)). It expands the parent in the current mode's set and makes the node active (and selected for a file). The node's `parentId` comes from the API response.
+  - Delete removes `deletedIds` from `nodesById`, removes the node from its parent's browse listing and deletes the browse listings of deleted folders. `total` drops by 1 only when the listing counted the node (listed, or past the prefix with pages pending). It subtracts 1 from the parent's `childCount` and the node's files from the parent and every ancestor, prunes `expanded` and every `filterExpanded` set, and clears `selectedId`/`activeId` inside the subtree. An unloaded node has no known parent, so only the entries keyed by `deletedIds` are cleaned. The cost is O(deleted + loaded siblings + depth) plus the usual shallow copies.
+  - Create and delete both drop every filtered listing and keep `appliedQuery` and `filterExpanded`. `matchCount` is never changed.
+  - For later tasks: `stats` is unchanged, so T19 calls `loader.loadStats()` after each create or delete. After a delete, `activeId` is `null` when it was inside the subtree, so the UI (T30) picks the next or previous row before the call and sets it afterwards. While filtering, a new node that doesn't match is active but not visible; the UI must allow that.
+  - Gates: format, typecheck and 333 unit tests (16 files, after the rebase onto T16, T13, T12 and T17) pass; `mutations.test.ts` has 28 tests. React Doctor reports no issues.
 
 ### T19: Explorer provider + hooks
 
@@ -494,7 +529,7 @@ flowchart TD
 - **Read first:** exports of `mock-file-explorer-api.ts`, `mock-config.ts`, `explorer-store.ts`, `loader.ts`, `mutations.ts`.
 - **Touch:** `app/features/file-explorer/state/explorer-provider.tsx`, `explorer-provider.test.tsx`, `app/test/setup.ts` (element-size mocks for the virtualizer).
 - **Change:**
-  - `<ExplorerProvider api?>` creates the api (defaulting to the mock built from `window.location.search`), the store, the loader and the mutations once, and triggers `ensureChildren(ROOT)` and `loadStats()` on mount.
+  - `<ExplorerProvider api?>` creates the api (defaulting to the mock built from `window.location.search`), the store, the loader and the mutations once. It triggers `ensureChildren(ROOT)` and `loadStats()` on mount, calls `loader.loadStats()` after each successful create or delete, and calls `loader.dispose()` on unmount.
   - Hooks: `useExplorer(selector)` (with shallow equality), `useLoader()`, `useMutations()`, `useApi()`.
   - `renderWithExplorer(ui, { api })` is a test helper using a zero-latency mock.
   - `setup.ts` mocks `offsetHeight`/`getBoundingClientRect` (and `ResizeObserver` if needed) so `@tanstack/react-virtual` renders rows in jsdom.

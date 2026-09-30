@@ -400,6 +400,36 @@ describe("revealFolders", () => {
   })
 })
 
+describe("stats", () => {
+  it("merges a partial update and skips notifying when nothing changed", () => {
+    const store = createExplorerStore()
+    const { setStats } = store.getState()
+    setStats({ total: 10 })
+    setStats({ filtered: 4 })
+    let notifications = 0
+    store.subscribe(() => notifications++)
+
+    setStats({ total: 10 })
+
+    expect(store.getState().stats).toEqual({ total: 10, filtered: 4 })
+    expect(notifications).toBe(0)
+  })
+
+  it.each<[string, FileQuery | null]>([
+    ["a newer query", videoQuery],
+    ["cleared filters", null],
+  ])("drops the filtered count and keeps the total after %s", (_, next) => {
+    const store = createExplorerStore()
+    const { applyFilters, setStats } = store.getState()
+    applyFilters(photosQuery)
+    setStats({ total: 10, filtered: 4 })
+
+    applyFilters(next)
+
+    expect(store.getState().stats).toEqual({ total: 10, filtered: null })
+  })
+})
+
 describe("select and setActive", () => {
   it("does not notify subscribers when the id is unchanged", () => {
     const store = createExplorerStore()
