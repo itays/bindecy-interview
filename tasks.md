@@ -7,18 +7,26 @@
 
 ### Branches and worktrees
 
-- Integration branch: `refactor/lazy-explorer`, created from `main`. Tasks merge into it; it merges into `main` once all tasks are `done`.
-- One worktree and one branch per task:
+- **One branch per wave**, created from an up-to-date `main` and named after the work it holds, e.g. `refactor/w4-mock-db-store` for W4 (T11 mock DB + T15 store). Each wave ships as its own PR into `main`.
 
   ```bash
-  git worktree add ../bindecy-worktrees/T06 -b task/T06-domain-filters refactor/lazy-explorer
-  cd ../bindecy-worktrees/T06 && bun install
+  git checkout main && git pull --ff-only
+  git checkout -b refactor/w5-query-index-loader
   ```
 
-- Before merging, rebase onto `refactor/lazy-explorer`, run the gates, then merge (fast-forward or squash). Afterwards run `git worktree remove ../bindecy-worktrees/T06`.
+- **One worktree and one branch per task**, created from the wave branch:
+
+  ```bash
+  git worktree add ../bindecy-worktrees/T12 -b task/T12-query-index refactor/w5-query-index-loader
+  cd ../bindecy-worktrees/T12 && bun install --frozen-lockfile
+  ```
+
+- Before merging a task, rebase it onto the wave branch, run the gates, then fast-forward the wave branch to it. Afterwards run `git worktree remove ../bindecy-worktrees/T12` and delete the task branch.
+- A wave starts only after the previous wave's PR is merged into `main`.
+- `refactor/lazy-explorer` was the integration branch for Phase 0 through W3 (PRs #4–#6). Don't reuse it.
 - Tasks in the same wave touch **disjoint files** (listed under *Touch*). If a task has to edit a file outside its *Touch* list, stop and coordinate first.
 - **`package.json` and `bun.lock` are changed only by T01, T02 and T04.** Any other task that needs a package must go back to T04's owner.
-- **E2E ports.** Parallel worktrees must not share port 5173. T02 makes the port configurable via `E2E_PORT`; each worktree picks its own (e.g. `E2E_PORT=5200 + task number`).
+- **E2E ports.** Parallel worktrees must not share a port. T02 makes the port configurable via `E2E_PORT` (default 4173); each worktree picks its own (e.g. `E2E_PORT=5200 + task number`).
 
 ### Gates, run before moving a task to `review`
 
