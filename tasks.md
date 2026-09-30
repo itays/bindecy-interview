@@ -118,11 +118,11 @@ flowchart TD
 | T03 | CI workflow | 0 | T02 | W2 | done |
 | T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | done |
 | T05 | Domain types + API contract | 1 | T02 | W2 | done |
-| T06 | Domain filters | 1 | T05 | W3 | todo |
-| T07 | Domain format + sort | 1 | T05 | W3 | todo |
+| T06 | Domain filters | 1 | T05 | W3 | done |
+| T07 | Domain format + sort | 1 | T05 | W3 | done |
 | T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | done |
 | T09 | Task-doc addendum | 1 | T02 | W2 | done |
-| T10 | Seeded generator + curated fixture | 2 | T05 | W3 | todo |
+| T10 | Seeded generator + curated fixture | 2 | T05 | W3 | done |
 | T11 | Mock DB core | 2 | T07, T10 | W4 | todo |
 | T12 | Mock query index | 2 | T06, T11 | W5 | todo |
 | T13 | Mock mutations | 2 | T11 | W5 | todo |
@@ -256,7 +256,7 @@ flowchart TD
 
 ### T06: Domain filters
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T05
 - **Read first:** `app/components/project-overview/file-tree-utils.ts:1-136`, `app/components/project-overview/file-tree-utils.test.ts`.
 - **Touch:** `app/features/file-explorer/domain/filters.ts`, `filters.test.ts`.
@@ -267,15 +267,28 @@ flowchart TD
   - `queryKey(query)` — stable: sorted categories, normalized name, byte bounds.
   - `matchesFile(file, ancestorNames, query)`, implementing the folder-name-match semantics.
 - **Acceptance:** tests cover trimming and case, inclusive bounds, open bounds, invalid values (negative, non-numeric, min > max), category OR, docs visible with no category selected, a folder-name match with and without size/category constraints, and `queryKey` stability regardless of category order.
+- **Outcome:**
+  - `domain/filters.ts` owns `FileFilters` (the toolbar's strings) and `FileFilterValidation`. `parseSizeInMb` and `validateFileFilters` are ported unchanged, messages included. `toFileQuery` returns `null` for invalid filters, trims the name but keeps its case, and dedupes categories without mutating its input.
+  - `queryKey(query)` is `JSON.stringify([trimmed lowercased name, minBytes, maxBytes, sorted unique categories])`. Name case, whitespace and category order or duplicates don't change it; `null` and `0` bounds stay distinct.
+  - `isQueryActive` is true when any dimension is set, including a `minBytes: 0` bound that excludes nothing.
+  - `matchesFile(file, ancestorNames, query)` checks size, then category, then the name, returning early; the name passes if the file name or any ancestor folder name contains it. Docs fail once any category is selected. `EMPTY_QUERY` is shared and must not be mutated.
+  - Matching uses `toLowerCase` instead of the old `toLocaleLowerCase`, so cache keys and matches don't depend on the runtime locale.
+  - Gates: format, typecheck and 100 unit tests (8 files) pass.
 
 ### T07: Domain format + sort
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T05
 - **Read first:** `app/components/project-overview/file-tree-utils.ts:315-325`.
 - **Touch:** `app/features/file-explorer/domain/format.ts`, `sort.ts`, `format.test.ts`, `sort.test.ts`.
 - **Change:** port `formatFileSize`. Add `compareNodes` (folders first, then `localeCompare` on the lowercased name, then id) and `sortKey(node)` / `compareSortKeys` for the keyset cursor.
 - **Acceptance:** tests cover byte/KB/MB boundaries, folders before files, a tie broken by id, and case-insensitive order.
+- **Outcome:**
+  - `domain/format.ts`: `formatFileSize` ported unchanged (`B` below 1 KiB, `KB` below 1 MiB, otherwise `MB`, one fraction digit, `en` grouping). The old rounding quirk stays: 1 MiB − 1 byte formats as `1,024 KB`.
+  - `domain/sort.ts`: `SortKey = readonly [rank: 0 | 1, name: string, id: string]` (folder 0, file 1, lowercased name, id). It's plain JSON, so the mock backend can encode it as a base64 cursor; validate its shape when decoding.
+  - `compareNodes` is `compareSortKeys(sortKey(a), sortKey(b))`, so the listing order and the cursor order can't drift. Names compare with one module-level `Intl.Collator("en")` (a fixed locale keeps the order deterministic and is faster than `localeCompare` per call); the id tiebreak compares code units, so the order is total.
+  - Hot loops (sorting 5k siblings, binary search) should precompute keys once and call `compareSortKeys` directly, instead of allocating a tuple per comparison through `compareNodes`.
+  - Gates: format, typecheck and 56 unit tests (7 files) pass.
 
 ### T08: UI prep: ScrollArea `viewportRef` + category details
 
@@ -311,7 +324,7 @@ flowchart TD
 
 ### T10: Seeded generator + curated fixture
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T05
 - **Read first:** `app/data/project-files.ts`, `domain/types.ts`.
 - **Touch:** `app/features/file-explorer/api/mock/curated-fixture.ts`, `generate-tree.ts`, `generate-tree.test.ts`.
@@ -324,6 +337,13 @@ flowchart TD
 
     Categories are mixed, sizes range from 0 B to 500 MB, and preview URLs are drawn from the verified pool.
 - **Acceptance:** tests cover the same seed giving identical output, a different seed giving different output, the total count within ±1% of `nodes`, unique ids, valid `parentId` references, the wide folder having ≥ 5,000 children, a depth ≥ 20, and the curated ids being present.
+- **Outcome:**
+  - `generate-tree.ts` exports the record types `MockFolderRecord`, `MockFileRecord` (with `previewUrl`) and `MockRecord`, plus `mulberry32(seed)` for T14's seeded jitter and failures. `curated-fixture.ts` exports `CURATED_RECORDS` (18 records, identical to `app/data/project-files.ts` when flattened) and `PREVIEW_URLS` per category, using only the URLs already in the old fixture.
+  - `generateTree({ seed, nodes })` returns exactly `nodes` records, parents before children, curated records first (copied, so callers may mutate them). It throws `RangeError` for a non-integer seed or `nodes` below 18. Generated ids are `folder-g<n>`/`file-g<n>`; the named folders have fixed ids `folder-asset-library` (top level), `folder-stock-footage` and `folder-deep-archive`.
+  - At 10k nodes: Stock footage has 5,000 files (mostly video), and the Deep archive chain `Level 03`..`Level 22` has files at depths 5, 10, 15, 20 and 22. The rest is a random tree of `Collection`/`Project`/`Batch`/`Set NNN` folders up to depth 8 with every category (577 folders and 9,423 files for seed 1). Generation takes about 5 ms at 10k and about 45 ms at 100k.
+  - Sibling names are unique case-insensitively by construction: each parent's child counter is part of the name. Sizes: 1% are 0 B, the rest are uniform up to a per-category cap (video 500 MB). Extensions match the preview media.
+  - When `nodes` is too small for the fixed shapes, the Stock footage folder and the remainder shrink first; below about 48 nodes the output is cut to `nodes`, still parents first.
+  - Gates: format, typecheck and 124 unit tests (9 files) pass.
 
 ### T11: Mock DB core
 
