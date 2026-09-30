@@ -121,7 +121,7 @@ flowchart TD
 | T06 | Domain filters | 1 | T05 | W3 | todo |
 | T07 | Domain format + sort | 1 | T05 | W3 | todo |
 | T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | todo |
-| T09 | Task-doc addendum | 1 | T02 | W2 | todo |
+| T09 | Task-doc addendum | 1 | T02 | W2 | done |
 | T10 | Seeded generator + curated fixture | 2 | T05 | W3 | todo |
 | T11 | Mock DB core | 2 | T07, T10 | W4 | todo |
 | T12 | Mock query index | 2 | T06, T11 | W5 | todo |
@@ -290,12 +290,15 @@ flowchart TD
 
 ### T09: Task-doc addendum
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `bindecy-task.md`.
 - **Touch:** `bindecy-task.md`.
 - **Change:** append an "Interviewer clarification (addendum)" section containing the agreed text: primary evaluation criteria are a large-scale tree of many thousands of items; a mocked data-access interface that behaves like a backend API; request only the data needed for the current view; attention to architecture, component boundaries, state management, rendering performance and scalability decisions.
 - **Acceptance:** the original brief text is unchanged, and the addendum is clearly marked as a later clarification.
+- **Outcome:**
+  - Appended `## Interviewer clarification (addendum)` to `bindecy-task.md`: one sentence marks it as a later clarification that isn't part of the original brief, followed by four bullets (large tree with no full load, backend-like mocked data API, request only what the view needs, evaluation focus areas).
+  - The diff only adds lines at the end of the file; the original brief is unchanged.
 
 ---
 
