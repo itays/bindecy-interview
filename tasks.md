@@ -118,7 +118,7 @@ flowchart TD
 | T03 | CI workflow | 0 | T02 | W2 | done |
 | T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | done |
 | T05 | Domain types + API contract | 1 | T02 | W2 | done |
-| T06 | Domain filters | 1 | T05 | W3 | todo |
+| T06 | Domain filters | 1 | T05 | W3 | done |
 | T07 | Domain format + sort | 1 | T05 | W3 | done |
 | T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | done |
 | T09 | Task-doc addendum | 1 | T02 | W2 | done |
@@ -256,7 +256,7 @@ flowchart TD
 
 ### T06: Domain filters
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T05
 - **Read first:** `app/components/project-overview/file-tree-utils.ts:1-136`, `app/components/project-overview/file-tree-utils.test.ts`.
 - **Touch:** `app/features/file-explorer/domain/filters.ts`, `filters.test.ts`.
@@ -267,6 +267,13 @@ flowchart TD
   - `queryKey(query)` — stable: sorted categories, normalized name, byte bounds.
   - `matchesFile(file, ancestorNames, query)`, implementing the folder-name-match semantics.
 - **Acceptance:** tests cover trimming and case, inclusive bounds, open bounds, invalid values (negative, non-numeric, min > max), category OR, docs visible with no category selected, a folder-name match with and without size/category constraints, and `queryKey` stability regardless of category order.
+- **Outcome:**
+  - `domain/filters.ts` owns `FileFilters` (the toolbar's strings) and `FileFilterValidation`. `parseSizeInMb` and `validateFileFilters` are ported unchanged, messages included. `toFileQuery` returns `null` for invalid filters, trims the name but keeps its case, and dedupes categories without mutating its input.
+  - `queryKey(query)` is `JSON.stringify([trimmed lowercased name, minBytes, maxBytes, sorted unique categories])`. Name case, whitespace and category order or duplicates don't change it; `null` and `0` bounds stay distinct.
+  - `isQueryActive` is true when any dimension is set, including a `minBytes: 0` bound that excludes nothing.
+  - `matchesFile(file, ancestorNames, query)` checks size, then category, then the name, returning early; the name passes if the file name or any ancestor folder name contains it. Docs fail once any category is selected. `EMPTY_QUERY` is shared and must not be mutated.
+  - Matching uses `toLowerCase` instead of the old `toLocaleLowerCase`, so cache keys and matches don't depend on the runtime locale.
+  - Gates: format, typecheck and 100 unit tests (8 files) pass.
 
 ### T07: Domain format + sort
 
