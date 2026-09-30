@@ -123,7 +123,7 @@ flowchart TD
 | T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | done |
 | T09 | Task-doc addendum | 1 | T02 | W2 | done |
 | T10 | Seeded generator + curated fixture | 2 | T05 | W3 | done |
-| T11 | Mock DB core | 2 | T07, T10 | W4 | todo |
+| T11 | Mock DB core | 2 | T07, T10 | W4 | done |
 | T12 | Mock query index | 2 | T06, T11 | W5 | todo |
 | T13 | Mock mutations | 2 | T11 | W5 | todo |
 | T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | todo |
@@ -347,7 +347,7 @@ flowchart TD
 
 ### T11: Mock DB core
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T07, T10
 - **Read first:** `domain/types.ts`, `domain/sort.ts`, `api/file-explorer-api.ts`.
 - **Touch:** `app/features/file-explorer/api/mock/mock-db.ts`, `mock-db.test.ts`.
@@ -361,6 +361,12 @@ flowchart TD
 
   The cursor is opaque, e.g. base64 JSON of the sort key.
 - **Acceptance:** tests cover paging a 5k folder with limit 100 (no gaps, no duplicates, `nextCursor` null on the last page), an unknown folder giving `not-found`, correct ancestors for a deep node, `fileCount` aggregates on a small hand-built tree, and a cursor staying valid after an item is inserted before it (using a test helper that inserts via the internal API).
+- **Outcome:**
+  - `mock-db.ts` exports `createMockDb(records)`, a synchronous in-memory index (the async adapter is T14). It stores one precomputed `SortKey` per node and a sorted `childIds` array per folder plus one for `ROOT_ID`, sorted with `compareSortKeys` over the precomputed keys. `childCount` is `childIds.length`; `fileCounts` covers every folder, and its `ROOT_ID` entry is the total that `stats()` returns.
+  - The build is O(n) plus sorting: two passes over the records, a pre-order walk from the root and a reverse pass that adds each folder's file count to its parent. Records may come in any order; a duplicate id or a missing or non-folder parent throws a plain `Error` (bad input data). Measured: about 5.5 ms at 10k nodes and 71 ms at 100k.
+  - `listChildren` pages by keyset in O(log n + limit): the cursor is base64 of the UTF-8 JSON of the last item's `SortKey`, validated on decode, and the next page starts at the `upperBound` binary search, so a cursor survives inserts and deletes before it. A bad limit or cursor throws `ApiError('validation')`; an unknown folder, a file or the literal `ROOT_ID` throws `not-found`. `includeIds` (for T12) filters the children first, O(children), and pages with the same keyset. Items are new objects without `previewUrl` or `matchCount`.
+  - `getNode` builds `ancestors` (top-level folder first) by walking `parentId`; file details add `previewUrl`. `onMutate`/`emitMutation` carry `MockMutationEvent` (`create` with `id`, `delete` with `deletedIds`). `db.internal` (`records`, `sortKeys`, `childIds`, `fileCounts`, `upperBound`, `toSummary`) is the documented surface for T13.
+  - Gates: format, typecheck and 176 unit tests (11 files) pass; `mock-db.test.ts` has 29 tests. React Doctor on the diff reports no issues.
 
 ### T12: Mock query index
 
