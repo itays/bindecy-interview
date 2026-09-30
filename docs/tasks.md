@@ -90,16 +90,13 @@ flowchart TD
   T25 --> T28[T28 E2E preview]
   T25 --> T29[T29 CRUD create UI]
   T29 --> T30[T30 CRUD delete UI]
-  T26 --> T31[T31 Perf proof]
-  T27 --> T31
-  T28 --> T31
-  T30 --> T31
-  T31 --> T32[T32 README + scaling]
   T30 --> T33[T33 Handover: cleanup, deploy, screenshots]
-  T33 --> T32
+  T33 --> T32[T32 README + scaling]
 ```
 
-**Critical path:** T01 → T02 → T05 → T07 → T11 → T12 → T14 → T19 → T20 → T22 → T25 → T29 → T30 → T31 → T32. T33 runs beside T31 but waits on the Cloudflare secrets, so it can become the critical path.
+**Critical path:** T01 → T02 → T05 → T07 → T11 → T12 → T14 → T19 → T20 → T22 → T25 → T29 → T30 → T33 → T32. T33 waits on the Cloudflare secrets.
+
+T31 (performance proof) was dropped: T32's scaling section describes the performance approaches instead, and T26's E2E spec already proves the bounded DOM row count.
 
 ## Waves (tasks within a wave can run in parallel worktrees)
 
@@ -118,7 +115,7 @@ flowchart TD
 | W10 | T25 | The app switches to the new feature here |
 | W11 | T26, T27, T28, T29 | E2E specs are separate files; T29 owns `tree-actions.tsx` |
 | W12 | T30 | |
-| W13 | T31, T33 | T33 moves this file to `docs/tasks.md`; the wave's status commit edits it there |
+| W13 | T33 | T33 moves this file to `docs/tasks.md`; the wave's status commit edits it there. T31 was dropped |
 | W14 | T32 | |
 
 ## Index
@@ -155,9 +152,9 @@ flowchart TD
 | T28 | E2E: preview | 5 | T25 | W11 | done |
 | T29 | CRUD: create UI | 5 | T25 | W11 | done |
 | T30 | CRUD: delete UI | 5 | T29 | W12 | done |
-| T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | todo |
-| T32 | README + scaling write-up | 6 | T31, T33 | W14 | todo |
-| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | todo |
+| T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | dropped |
+| T32 | README + scaling write-up | 6 | T33 | W14 | todo |
+| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | review |
 
 ---
 
@@ -824,24 +821,15 @@ flowchart TD
 
 ### T31: Performance proof
 
-- **Status:** todo
+- **Status:** dropped
 - **Depends on:** T26, T27, T28, T30
-- **Touch:** `docs/performance.md`.
-- **Change:** measure the production build at `?nodes=1000`, `10000` and `100000` (`latency=0`, Chromium via Playwright or DevTools):
-  - initial `treeitem` count;
-  - the count after opening Stock footage and scrolling to the end;
-  - React Profiler commit durations for expanding a folder, an arrow-key press and a filter apply;
-  - JS heap after load;
-  - the time for the first filter apply at 100k (the query-index scan).
-
-  Compare with the pre-refactor build at `main` (fixture only) where it's meaningful. Record the method and the numbers.
-- **Acceptance:** `docs/performance.md` has a table per dataset size plus the reproduction commands. The DOM row count stays bounded (≤ ~100) at every size.
+- **Reason:** a benchmark document (Profiler commit times, heap, per-size tables) is more than a take-home needs. T32's scaling section explains the performance approaches instead, and T26's paging spec already asserts the bound that matters: at most 100 `treeitem`s in the DOM after scrolling to row 1,000 of the 5,000-child folder.
 
 ### T32: README + scaling write-up
 
 - **Status:** todo
-- **Depends on:** T31, T33
-- **Read first:** `docs/bindecy-task.md`, `docs/plan.md` (§Decision log, §Architecture, §Data-access interface), `docs/performance.md`, `api/mock/mock-config.ts`, `package.json` scripts.
+- **Depends on:** T33
+- **Read first:** `docs/bindecy-task.md`, `docs/plan.md` (§Decision log, §Architecture, §Data-access interface), `api/mock/mock-config.ts`, `package.json` scripts.
 - **Touch:** `README.md`, `docs/plan.md` (tick the completion checklist).
 - **Change:** replace the README with a reviewer-first document of at most ~200 lines. Depth goes behind links to `docs/` or into `<details>` blocks; no section repeats `plan.md`. Sections, in order:
   1. **Header:** title, one-line summary, CI badge, the live demo link from T33.
@@ -854,7 +842,7 @@ flowchart TD
      - Applying a filter: debounce, abort of in-flight requests, `search` reveals the paths of the first hits, and a selected file that stops matching is cleared (D3).
      - Create and delete: the API mutation clears the query index cache, then the state mutation updates listings, counts and selection.
   7. **State and data contract:** D1 (one Zustand store plus the loader, not TanStack Query) in 3 bullets; the `FileExplorerApi` interface in `<details>`.
-  8. **Scaling to 10k+:** lazy listings, keyset paging, virtualization with fixed row heights, per-row subscriptions, debounce and abort, the server-side query index. The summary numbers from T31, with a link to `docs/performance.md`. Next steps: a real search index, ETags / conditional requests, push invalidation over websockets, a Web Worker for the mock (D4), and TanStack Pacer's async queuer for bulk operations.
+  8. **Scaling to 10k+:** the performance approaches, one line each on what it avoids: lazy listings (only expanded folders are fetched), keyset paging (100 children per page, loaded when the load-more row scrolls into range), virtualization with fixed row heights (only the visible rows are in the DOM), per-row store subscriptions (a selection or focus change re-renders one or two rows), debounced filters with aborted stale requests, and the server-side query index (one cached scan per query, so the client never walks the whole tree). As evidence, cite T26's E2E spec (at most 100 `treeitem`s in the DOM at row 1,000 of the 5,000-child folder) and the `?nodes=100000&latency=0` preset. Next steps: a real search index, ETags / conditional requests, push invalidation over websockets, a Web Worker for the mock (D4), and TanStack Pacer's async queuer for bulk operations.
   9. **Where to look first:** 5 files with one line each: `file-explorer-api.ts`, `explorer-store.ts`, `loader.ts`, `mock-query-index.ts`, `virtual-tree.tsx`.
   10. **Tech stack:** one compact table.
   11. **Running locally:** prerequisite Bun 1.4 (with the install command, since the repo has only `bun.lock`), then `bun install`, `bun run dev`, `bun run test`, `bun run test:e2e`; a commands table; the mock URL params with their defaults and ranges.
@@ -873,21 +861,21 @@ flowchart TD
 
 ### T33: Handover: cleanup, Cloudflare deploy, screenshots
 
-- **Status:** todo
+- **Status:** review
 - **Depends on:** T30
 - **Read first:** `.github/workflows/ci.yml`, `react-router.config.ts`, `playwright.config.ts`, the current `cloudflare/wrangler-action` and Cloudflare Pages "Direct Upload" docs.
 - **Touch:** `Dockerfile`, `.dockerignore`, `bindecy-task.md`, `plan.md`, `tasks.md`, `show-me-refactor-plan.html` (all moved into `docs/`), `README.md` (the `plan.md` link only), `.github/workflows/ci.yml`, `scripts/capture-screenshots.ts`, `docs/images/*`.
 - **Change:**
   1. **Cleanup.** Delete `Dockerfile` and `.dockerignore`: the Dockerfile runs `npm ci` without a `package-lock.json`, and its final stage omits the dev dependency `vite` that `start` needs. `git mv` the brief, `plan.md`, `tasks.md` and `show-me-refactor-plan.html` into `docs/`. Their links to each other are relative, so they keep working. Point the README's `plan.md` link at `docs/plan.md`.
   2. **One-time Cloudflare setup (repo owner, manual).**
-     - Create a Pages project for Direct Upload: `bunx wrangler pages project create bindecy-interview --production-branch=main`. If the name is taken, the `*.pages.dev` subdomain gets a suffix; use the URL that Cloudflare reports.
+     - Create a Pages project for Direct Upload: `bunx wrangler pages project create file-explorer-task --production-branch=main`. If the name is taken, the `*.pages.dev` subdomain gets a suffix; use the URL that Cloudflare reports.
      - Create an API token with the *Account › Cloudflare Pages › Edit* permission.
      - Store the token and the account ID as the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (`gh secret set`).
 
      The task is `blocked` until the secrets exist.
   3. **Deploy job** in `ci.yml`:
      - `checks` uploads `build/client` as an artifact after the Build step, so the deploy ships the exact build that passed the gates.
-     - A `deploy` job with `needs: checks` downloads the artifact and runs `cloudflare/wrangler-action@v3` with `pages deploy build/client --project-name=bindecy-interview --branch=<branch>`. Pushes to `main` deploy to production (`--branch=main`); same-repo PRs get a preview deploy (`--branch=${{ github.head_ref }}`). PRs from forks skip the job, since they have no secrets.
+     - A `deploy` job with `needs: checks` downloads the artifact and runs `cloudflare/wrangler-action@v3` with `pages deploy build/client --project-name=file-explorer-task --branch=<branch>`. Pushes to `main` deploy to production (`--branch=main`); same-repo PRs get a preview deploy (`--branch=${{ github.head_ref }}`). PRs from forks skip the job, since they have no secrets.
      - Write the `deployment-url` output to the job summary.
      - Don't add `wrangler` to `package.json`; the action installs it.
 
@@ -904,3 +892,11 @@ flowchart TD
   - The repo homepage points at the production URL.
   - `docs/images/` holds the 3 screenshots, and the script regenerates them.
   - `actionlint` reports no findings. Gates: format, typecheck, test, build.
+- **Outcome (so far):**
+  - Cleanup: `Dockerfile` and `.dockerignore` are deleted, the four documents are `git mv`'d into `docs/` (their relative links still resolve), and the README links `docs/plan.md`.
+  - Deploy job: `checks` uploads `build/client` as the `client-build` artifact (1-day retention) right after Build. `deploy` (`needs: checks`) runs on pushes and on same-repo PRs, downloads the artifact and runs `pages deploy build/client --project-name=file-explorer-task --branch=${{ github.head_ref || 'main' }} --commit-hash=…`, then writes `deployment-url` and the branch alias to the job summary. It uses `cloudflare/wrangler-action@v4` and `actions/download-artifact@v8`, the current majors (deviation from `@v3`: v4 only changes the default Wrangler to v4). The action runs `command` through `@actions/exec`, not a shell, so a branch name can't inject a command.
+  - Screenshots: `scripts/capture-screenshots.ts <baseURL>` captures the three PNGs in light mode with reduced motion, waiting until the preview's loading status is gone and no "preview unavailable" fallback shows. Sizes: `explorer-desktop.png` 233 KB, `filter-active.png` 77 KB (name filter `interview`, `arden-interview.mp3` previewed), `mobile.png` 105 KB (the stacked layout scrolled to the tree card, `primary-mark.png` selected).
+  - Checks: `actionlint` 1.7.12 reports no findings; format, typecheck, 481 unit tests (22 files) and build pass.
+  - Pages project (deviation): named `file-explorer-task` instead of `bindecy-interview`, so production is `https://file-explorer-task.pages.dev`; `ci.yml` and step 2 above use that name.
+  - Preview deploy: on [PR #18](https://github.com/itays/bindecy-interview/pull/18) `checks` passed in 1m19s and `deploy` in 26s, publishing `https://0cd3e1a2.file-explorer-task.pages.dev` and the branch alias `https://refactor-w13-handover.file-explorer-task.pages.dev`, both in the job summary. On the alias, `/`, `/?nodes=100000&latency=0` and `/does-not-exist` return 200 with the app shell, and Chromium at 100k nodes shows "Showing all 91,418 files." with 5 top-level rows and no page errors.
+  - Left after the merge: check the production deploy of `main`, then `gh repo edit --homepage https://file-explorer-task.pages.dev` and a new description.

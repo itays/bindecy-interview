@@ -251,7 +251,7 @@ The detailed breakdown with dependencies, parallel waves and statuses lives in [
 | 3 — State | Store, flatten, loader, mutations, provider |
 | 4 — UI | Tree rows, keyboard model, virtual tree, preview port, toolbar port |
 | 5 — Cutover & features | Page cutover and old-code deletion, E2E suites, CRUD UI |
-| 6 — Proof & docs | Performance measurements at 1k/10k/100k, handover (docs moved to `docs/`, Cloudflare Pages deploy, screenshots), README and scaling write-up |
+| 6 — Proof & docs | Handover (docs moved to `docs/`, Cloudflare Pages deploy, screenshots), README and scaling write-up |
 
 ## Non-goals
 
@@ -262,9 +262,9 @@ The detailed breakdown with dependencies, parallel waves and statuses lives in [
 
 ## Completion checklist
 
-- [ ] Every task in `tasks.md` is `done`.
+- [ ] Every task in `tasks.md` is `done` (T31 was dropped).
 - [ ] `bun run format:check`, `bun run typecheck`, `bun run test`, `bun run build` and `bun run test:e2e` pass locally, and CI is green.
-- [ ] 100k-node run: the DOM holds at most ~100 `treeitem` rows after opening the 5k folder; numbers recorded in the README.
+- [ ] The DOM holds at most ~100 `treeitem` rows in the 5k folder (asserted by `e2e/tree.e2e.ts`), and the README explains the performance approaches.
 - [ ] No old `app/components/project-overview`, `app/data`, or `app/types` code remains.
 - [ ] README documents the architecture, state approach, API contract and scaling strategy.
 - [ ] The app is live on Cloudflare Pages, deployed from `main` after CI passes, and the README links to it.
