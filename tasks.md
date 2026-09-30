@@ -146,7 +146,7 @@ flowchart TD
 | T21 | Tree keyboard model | 4 | T16 | W6 | done |
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
 | T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | review |
-| T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | todo |
+| T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | review |
 | T25 | Page cutover + delete old code | 5 | T22, T23, T24 | W10 | todo |
 | T26 | E2E: tree | 5 | T25 | W11 | todo |
 | T27 | E2E: filters + selection clearing | 5 | T25 | W11 | todo |
@@ -639,7 +639,7 @@ flowchart TD
 
 ### T24: Filter toolbar port (debounced)
 
-- **Status:** todo
+- **Status:** review
 - **Depends on:** T06, T19
 - **Read first:** `app/components/project-overview/filter-toolbar.tsx`, `domain/filters.ts`, `state/loader.ts` (`applyFilters`, `loadStats`).
 - **Touch:** `app/features/file-explorer/ui/filter-toolbar/filter-toolbar.tsx`, `filter-toolbar.test.tsx`.
@@ -650,6 +650,15 @@ flowchart TD
   - The status line and live region use the stats: `Showing X of Y files`, no matches, "Fix the size filters…", and the D3 announcement from the store.
 - **Acceptance:** tests (fake timers) show rapid typing producing one `applyFilters` call, an invalid range never calling it, Enter applying immediately, Reset cancelling the pending call, and the status text announcing the counts.
 - **E2E:** not reachable before T25. T27 must cover the debounced apply after typing, Enter applying at once, Reset, the field errors for an invalid range, and the `Showing X of Y files` status line.
+- **Outcome:**
+  - `ui/filter-toolbar/filter-toolbar.tsx` exports `FilterToolbar`, which takes no props and reads everything through the provider hooks. The markup, labels, ids (`file-name`, `minimum-size`, `maximum-size`), toggle names ("Audio files", "Image files", "Video files"), "Reset filters" and the field-error rules are the old toolbar's. A size field's error shows once it's left or the draft is committed with Enter, and hides again while typing; an invalid range marks both fields.
+  - The draft is local state and is validated on every render. `useDebouncedCallback(applyDraft, 250)` receives each new draft and calls `loader.applyFilters(query)` only when `toFileQuery` returns a query (an empty draft gives an inactive query, which the loader treats as `null`). Enter and submit call `flush()`. Reset calls `cancel()`, clears the draft and the touched fields, and calls `loader.applyFilters(null)` at once; it's enabled while the draft has input or a query is applied. `use-debounce` cancels a pending call on unmount.
+  - File-type toggles apply at once (deviation): each toggle schedules the new draft and flushes it, so a click (and any pending typing) doesn't wait for the debounce. Rapid clicks can send several queries; the loader aborts the superseded ones.
+  - Status texts come from `stats` and `appliedQuery`, with the old copy and `en-US` grouped numbers: `Showing all {total} files.`, `Showing {filtered} of {total} files.`, `No matching files. Showing 0 of {total} files.`, and "Fix the size filters to update the file results." while the draft is invalid. The badge shows `{shown} of {total} files`, or "Filters paused" for an invalid draft. While the counts load (a `null` total, or a `null` filtered count under a query) the line says "Counting files…" / "Counting matching files…" and the badge "Counting…", so a previous query's count never shows. The status describes the applied query, so a draft still waiting for the debounce keeps the last applied counts.
+  - Live regions: the result region (`role="status"`, polite, atomic) announces the settled line. Loading counts, and an invalid draft whose errors aren't showing yet, keep its last message, so transient states aren't read out; Enter and Reset repeat the message. The D3 notice (the store's `announcement`, e.g. "project-brief.pdf doesn't match the filters and was deselected.") is a second polite region without a role (deviation: keeping `role="status"` unique for T27). A store subscription announces it whenever one update changes `appliedQuery` and clears the selection, so the same file deselected twice is announced twice.
+  - For later tasks: T25 places `<FilterToolbar />` inside `ExplorerProvider` above the tree. T27 can target the copy above with `getByRole("status")` and the `p` status line. A failed filtered count keeps "Counting matching files…" until the next query or `loadStats()`, because the store resets `stats.filtered` when the key changes.
+  - Tests use `vi.useFakeTimers({ shouldAdvanceTime: true })`: Testing Library's async wrapper waits on `setTimeout`, and with vitest's fake timers alone every `user` action hangs. The debounce is asserted right after typing and after `advanceTimersByTimeAsync(250)` inside `act`.
+  - Gates: format, typecheck, 457 unit tests (20 files), build and `test:e2e` (1 smoke spec) pass; `filter-toolbar.test.tsx` has 9 tests (5 runs in a row passed). React Doctor (`--scope changed --base main`) reports no issues after moving the status texts into a pure `filterStatus` helper (it flagged the component's complexity before).
 
 ---
 
