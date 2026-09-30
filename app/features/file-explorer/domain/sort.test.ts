@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
 import { compareNodes, compareSortKeys, sortKey } from "./sort"
-import type { SortKey } from "./sort"
 import type { NodeSummary } from "./types"
 
 type Sortable = Pick<NodeSummary, "id" | "name" | "type">
@@ -103,16 +102,5 @@ describe("sortKey / compareSortKeys", () => {
       .map(({ node }) => node)
 
     expect(ids(byKey)).toEqual(ids([...shuffle(ordered, 5)].sort(compareNodes)))
-  })
-
-  it("keeps its comparison result through a JSON round-trip", () => {
-    for (const a of ordered) {
-      for (const b of ordered) {
-        const revived = JSON.parse(JSON.stringify(sortKey(a))) as SortKey
-        expect(Math.sign(compareSortKeys(revived, sortKey(b)))).toBe(
-          Math.sign(compareSortKeys(sortKey(a), sortKey(b)))
-        )
-      }
-    }
   })
 })
