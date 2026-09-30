@@ -152,7 +152,7 @@ flowchart TD
 | T27 | E2E: filters + selection clearing | 5 | T25 | W11 | done |
 | T28 | E2E: preview | 5 | T25 | W11 | done |
 | T29 | CRUD: create UI | 5 | T25 | W11 | done |
-| T30 | CRUD: delete UI | 5 | T29 | W12 | todo |
+| T30 | CRUD: delete UI | 5 | T29 | W12 | done |
 | T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | todo |
 | T32 | README + scaling write-up | 6 | T31 | W14 | todo |
 
@@ -796,7 +796,7 @@ flowchart TD
 
 ### T30: CRUD: delete UI
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T29
 - **Read first:** `ui/tree/tree-actions.tsx`, `ui/tree/virtual-tree.tsx` (the Delete key dispatch), `state/mutations.ts`.
 - **Touch:** `ui/tree/tree-actions.tsx`, `ui/crud/delete-node-dialog.tsx`, `delete-node-dialog.test.tsx`, `ui/tree/virtual-tree.tsx` (wire the `delete` action), `e2e/crud.e2e.ts` (add specs).
@@ -805,6 +805,15 @@ flowchart TD
   - Confirming calls `mutations.deleteNode`. Focus then moves to the next row, or the previous one. The preview clears if the selected file was in the subtree.
 - **Acceptance:** component test for the dialog copy and the confirm/cancel paths. E2E: deleting a folder that contains the selected file removes the rows, clears the preview and moves focus to the neighbouring row.
 - **E2E:** besides the flow above, `e2e/crud.e2e.ts` covers the Delete key opening the dialog and Cancel leaving the tree unchanged. Passes with `--repeat-each=3`.
+- **Outcome:**
+  - `ui/crud/delete-node-dialog.tsx` exports `DeleteNodeDialog({ node, open, onOpenChange, onDelete, finalFocus })`, an `AlertDialog` titled "Delete {name}?". The description names the descendant files from the node's `fileCount` (the full count, also while filtering): "Deletes Brand system and the 3 files in it. This can't be undone.", "Deletes Drafts, which has no files. …", or "Deletes brand-guidelines.pdf. …". The body mounts only while the dialog is open. Base UI focuses Cancel first. While the request runs, the destructive button reads "Deleting…" and repeat clicks are ignored. A rejection shows its message as a form alert and keeps the dialog open.
+  - `TreeActions` adds an outline icon "Delete" button after "New file". It is disabled unless the active row is a loaded node, so it is disabled with no active row and on status rows. It owns the delete dialog state next to the create dialog's and exposes `TreeActionsHandle.requestDelete(id)` through a React 19 `ref` prop. The target `NodeSummary` is kept after closing, so the closing dialog keeps its content.
+  - Deleting: `onDelete` picks the next row from the visible rows before the call: the first row after the node's subtree (the deeper pre-order run that follows it), else the row before it, else `null` for a node that isn't a visible row. O(rows). It then awaits `mutations.deleteNode` and sets that row active; T18 has already cleared the selection, so the preview shows "Select a file to preview". On close, `finalFocus` scrolls the row into view and focuses the tree (`revealRow`, T29's `revealCreatedRow` renamed). After Cancel, or with no neighbouring row, focus returns to the element that opened the dialog: the button, or the tree for the Delete key.
+  - Delete key: `VirtualTree` takes `onDeleteRequest?(id)` and dispatches T21's `delete` action to it with `preventDefault`. Without the prop the key is left to the browser, as before.
+  - Deviation (outside the Touch list): `ui/tree/tree-panel.tsx` connects the two siblings (`useRef<TreeActionsHandle>`, passed to `TreeActions` and read in `VirtualTree`'s `onDeleteRequest`). Its header actions now use `gap-1` instead of `gap-2`: with a third 28 px button the description wrapped to three lines (header 83 → 103 px at 1280×900). With `gap-1`, measured on the build with `?seed=1`, the header is 83 px and the card 352×544 at 1280×900, 352×527 at 1280×700, and 358×512 at 390×844, the same as T25/T29, with no horizontal overflow. At `?nodes=100000` the wider badge ("91,418") still wraps the description to three lines (103 px header; the card stays 544 px).
+  - Tests: `delete-node-dialog.test.tsx` (8) renders `TreePanel`. It covers Delete disabled until a row is active; the folder, empty-folder and file copy; the Delete key opening the dialog with Cancel focused, then Cancel leaving the tree, the active row and the API untouched with focus back on the tree; deleting Brand system with its file selected (rows gone, selection cleared, Drafts after the subtree active, tree focused); deleting the last row activating the previous one; and an API `not-found` shown in the dialog with the row kept.
+  - E2E: `e2e/crud.e2e.ts` has 2 new specs (5 total). One selects `brand-guidelines.pdf`, presses Left, and deletes Brand system with the button: the description names 3 files; Brand system, Logos and the file are gone; the preview shows "Select a file to preview"; the tree is focused on Launch campaign (set size 4); and the counts read "Showing all 9,420 files." and 9,420. The other opens the dialog with the Delete key (Cancel focused); Cancel returns focus to the tree with Brand system still active, expanded and at 3 files, and the total still 9,423.
+  - Gates: format, typecheck, 481 unit tests (22 files), build and `test:e2e` (23 passed, port 5232; `--repeat-each=3` 69 passed, both with `CI` unset, so without retries). React Doctor (`--scope changed --base main`) reports no issues.
 
 ---
 

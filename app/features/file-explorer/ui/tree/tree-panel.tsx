@@ -1,4 +1,5 @@
 import { SearchXIcon } from "lucide-react"
+import { useRef } from "react"
 
 import { Badge } from "~/components/ui/badge"
 import {
@@ -24,12 +25,13 @@ import {
 } from "~/features/file-explorer/state/explorer-store"
 
 import { TreeActions } from "./tree-actions"
+import type { TreeActionsHandle } from "./tree-actions"
 import { VirtualTree } from "./virtual-tree"
 
 const countFormatter = new Intl.NumberFormat("en")
 
 /**
- * The "Project files" card: the create actions, the file count for the
+ * The "Project files" card: the CRUD actions, the file count for the
  * applied query, the virtual tree, or an empty state once the top level
  * loads with no items.
  */
@@ -45,6 +47,7 @@ export function TreePanel() {
     }
   })
   const countLabel = `${filtering ? "matching " : ""}${fileCount === 1 ? "file" : "files"}`
+  const actionsRef = useRef<TreeActionsHandle>(null)
 
   return (
     <Card className="h-[32rem] min-w-0 md:h-full md:min-h-[30rem]">
@@ -55,8 +58,8 @@ export function TreePanel() {
             ? "Adjust or reset the filters to see project files"
             : "Use arrow keys to move through folders and files"}
         </CardDescription>
-        <CardAction className="flex items-center gap-2">
-          <TreeActions />
+        <CardAction className="flex items-center gap-1">
+          <TreeActions ref={actionsRef} />
           {fileCount === null ? null : (
             <Badge variant="secondary" className="tabular-nums">
               {countFormatter.format(fileCount)}
@@ -86,7 +89,9 @@ export function TreePanel() {
             </EmptyHeader>
           </Empty>
         ) : (
-          <VirtualTree />
+          <VirtualTree
+            onDeleteRequest={(id) => actionsRef.current?.requestDelete(id)}
+          />
         )}
       </CardContent>
     </Card>

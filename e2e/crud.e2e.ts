@@ -152,3 +152,78 @@ test("shows a duplicate name on the name field and keeps the dialog open", async
 
   expect(pageErrors).toEqual([])
 })
+
+test("deletes a folder holding the selected file, clears the preview and activates the next row", async ({
+  page,
+}) => {
+  const { tree, pageErrors } = await openBrandSystem(page)
+
+  await tree.getByRole("treeitem", { name: /^brand-guidelines\.pdf/ }).click()
+  await expect(
+    page.getByRole("heading", { name: "brand-guidelines.pdf" })
+  ).toBeVisible()
+
+  // Left moves from the file to its folder.
+  await page.keyboard.press("ArrowLeft")
+  await expect(tree).toHaveAttribute(
+    "aria-activedescendant",
+    "tree-row-folder-brand"
+  )
+
+  await page.getByRole("button", { name: "Delete" }).click()
+  const dialog = page.getByRole("alertdialog", { name: "Delete Brand system?" })
+  await expect(dialog).toHaveAccessibleDescription(
+    "Deletes Brand system and the 3 files in it. This can't be undone."
+  )
+  await dialog.getByRole("button", { name: "Delete" }).click()
+  await expect(dialog).toBeHidden()
+
+  await expect(page.locator("#tree-row-folder-brand")).toHaveCount(0)
+  await expect(page.locator("#tree-row-folder-logos")).toHaveCount(0)
+  await expect(page.locator("#tree-row-file-brand-guidelines")).toHaveCount(0)
+  await expect(page.getByText("Select a file to preview")).toBeVisible()
+
+  // Focus is back on the tree, on the row after the deleted subtree.
+  await expect(tree).toBeFocused()
+  await expect(tree).toHaveAttribute(
+    "aria-activedescendant",
+    "tree-row-folder-launch-campaign"
+  )
+  await expect(
+    page.locator("#tree-row-folder-launch-campaign")
+  ).toHaveAttribute("aria-setsize", "4")
+  await expect(
+    page.locator("p", { hasText: "Showing all 9,420 files." })
+  ).toBeVisible()
+  await expect(page.getByText("9,420 files", { exact: true })).toBeVisible()
+
+  expect(pageErrors).toEqual([])
+})
+
+test("opens the delete confirmation with the Delete key, and Cancel leaves the tree unchanged", async ({
+  page,
+}) => {
+  const { tree, brandSystem, pageErrors } = await openBrandSystem(page)
+
+  await expect(tree).toBeFocused()
+  await page.keyboard.press("Delete")
+
+  const dialog = page.getByRole("alertdialog", { name: "Delete Brand system?" })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused()
+
+  await dialog.getByRole("button", { name: "Cancel" }).click()
+  await expect(dialog).toBeHidden()
+
+  await expect(tree).toBeFocused()
+  await expect(tree).toHaveAttribute(
+    "aria-activedescendant",
+    "tree-row-folder-brand"
+  )
+  await expect(brandSystem).toHaveAccessibleName("Brand system (3 files)")
+  await expect(brandSystem).toHaveAttribute("aria-expanded", "true")
+  await expect(tree.getByRole("treeitem", { name: /^Logos/ })).toBeVisible()
+  await expect(page.getByText("9,423 files", { exact: true })).toBeVisible()
+
+  expect(pageErrors).toEqual([])
+})
