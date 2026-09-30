@@ -1,5 +1,4 @@
 import { SearchXIcon } from "lucide-react"
-import type { ReactNode } from "react"
 
 import { Badge } from "~/components/ui/badge"
 import {
@@ -24,20 +23,17 @@ import {
   isFiltering,
 } from "~/features/file-explorer/state/explorer-store"
 
+import { TreeActions } from "./tree-actions"
 import { VirtualTree } from "./virtual-tree"
 
 const countFormatter = new Intl.NumberFormat("en")
 
-export type TreePanelProps = {
-  /** Header actions shown before the file count (the CRUD buttons). */
-  actions?: ReactNode
-}
-
 /**
- * The "Project files" card: the file count for the applied query, the
- * virtual tree, or an empty state once the top level loads with no items.
+ * The "Project files" card: the create actions, the file count for the
+ * applied query, the virtual tree, or an empty state once the top level
+ * loads with no items.
  */
-export function TreePanel({ actions }: TreePanelProps) {
+export function TreePanel() {
   const { filtering, fileCount, isEmpty } = useExplorer((state) => {
     const root = state.listings[currentQueryKey(state)]?.[folderKey(null)]
     const filtering = isFiltering(state)
@@ -60,7 +56,7 @@ export function TreePanel({ actions }: TreePanelProps) {
             : "Use arrow keys to move through folders and files"}
         </CardDescription>
         <CardAction className="flex items-center gap-2">
-          {actions}
+          <TreeActions />
           {fileCount === null ? null : (
             <Badge variant="secondary" className="tabular-nums">
               {countFormatter.format(fileCount)}
