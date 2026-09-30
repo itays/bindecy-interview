@@ -136,14 +136,14 @@ flowchart TD
 | T11 | Mock DB core | 2 | T07, T10 | W4 | done |
 | T12 | Mock query index | 2 | T06, T11 | W5 | done |
 | T13 | Mock mutations | 2 | T11 | W5 | done |
-| T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | todo |
+| T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | done |
 | T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | done |
 | T16 | Visible rows (flatten) | 3 | T15 | W5 | done |
 | T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | done |
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | done |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | todo |
 | T20 | Tree row components | 4 | T16, T19 | W8 | todo |
-| T21 | Tree keyboard model | 4 | T16 | W6 | todo |
+| T21 | Tree keyboard model | 4 | T16 | W6 | done |
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
 | T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | todo |
 | T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | todo |
@@ -420,7 +420,7 @@ flowchart TD
 
 ### T14: Mock API adapter + URL config
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T12, T13
 - **Read first:** `api/file-explorer-api.ts`, `mock-db.ts`, `mock-query-index.ts`, `mock-mutations.ts` (exports only).
 - **Touch:** `app/features/file-explorer/api/mock/mock-file-explorer-api.ts`, `mock-config.ts`, `mock-file-explorer-api.test.ts`.
@@ -432,6 +432,13 @@ flowchart TD
   - `failRate` rejects reads with `ApiError('network')` at random (seeded). `failFirst=N` rejects the first N `listChildren` calls, then succeeds.
   - `parseMockConfig(searchParams)` reads `seed`, `nodes`, `latency`, `failRate` and `failFirst`, with defaults 1 / 10000 / 250 / 0 / 0, clamped to sane ranges.
 - **Acceptance:** tests (fake timers) show an abort cancelling mid-delay, `failRate: 1` always rejecting, `failFirst: 2` failing exactly the first two `listChildren` calls (other reads unaffected), `latency: 0` resolving without timers, config defaults and clamping, and the adapter returning copies (mutating a result doesn't change the DB).
+- **Outcome:**
+  - `createMockFileExplorerApi(config)` merges `config` with `DEFAULT_MOCK_CONFIG` and builds the generated tree, the DB, the query index and the mutations once. An omitted or inactive query goes to `db.listChildren`/`db.stats`; an active one goes to `index.listChildren` (with `matchCount`)/`index.stats`. `search` uses the index and `getNode` uses the DB.
+  - Every method, mutations included, waits `latency × (0.5 + rng())` ms from its own seeded `mulberry32` stream, and only then touches the DB. `latency: 0` resolves on a microtask with no timer.
+  - An aborted signal rejects at once with `DOMException('AbortError')`; aborting during the delay clears the timer and rejects the same way. With `latency: 0` there is no delay, so an abort after the call starts doesn't reject (the loader drops such responses). Mutations take no signal.
+  - Failures are decided when a read's delay ends. `failRate` rejects reads with `ApiError('network')` from a second seeded stream; mutations never fail at random. `failFirst=N` rejects the first N `listChildren` calls whose delay ends, so aborted calls don't use up its budget and other reads are unaffected.
+  - No extra copies (deviation): the DB, the index and the mutations already build new objects per call, and tests show that changing a result doesn't change a later identical call. `parseMockConfig` uses one table of ranges: a missing, blank or non-numeric value falls back to the default; `seed`, `nodes` and `failFirst` are truncated; limits are `nodes` 18–200,000, `latency` 0–10,000 ms, `failRate` 0–1 and `failFirst` 0–1,000.
+  - Gates: format, typecheck and 394 unit tests (17 files) pass; `mock-file-explorer-api.test.ts` has 60 tests. A throwaway change that read the DB before the delay made the in-flight-mutation test fail. React Doctor reports no issues.
 
 ---
 
@@ -556,13 +563,20 @@ flowchart TD
 
 ### T21: Tree keyboard model
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T16
 - **Read first:** `app/components/project-overview/tree-node.tsx:63-122`, `state/visible-rows.ts` (`Row` type).
 - **Touch:** `app/features/file-explorer/ui/tree/tree-keyboard.ts`, `tree-keyboard.test.ts`.
 - **Change:** `resolveTreeKey(rows, activeIndex, key, isExpanded) → { type: 'move', index } | { type: 'toggle', id } | { type: 'select', id } | { type: 'load-more' | 'retry', folderId } | { type: 'delete', id } | null`. It covers Up/Down/Home/End, Right (expand, or move to the first child), Left (collapse, or move to the parent via `parentId`), Enter/Space and Delete. A pure function.
 - **Acceptance:** tests cover every key at the boundaries (first and last row), Left from a nested file to its parent, Right on an expanded folder, and Enter on a status row.
 - **E2E:** pure function; T26's keyboard flow covers it through T22's container. That flow must include Enter/Space on a folder and on a file, and Left from a nested file to its parent.
+- **Outcome:**
+  - `ui/tree/tree-keyboard.ts` exports `TreeKeyAction` and `resolveTreeKey(rows, activeIndex, key, state)`, a pure function that maps a `KeyboardEvent.key` to `move`, `toggle`, `select`, `load-more`, `retry` or `delete`, or `null` when there is nothing to do. The container that owns focus (T22) dispatches it.
+  - Signature (deviation): it takes `ExplorerState` instead of `isExpanded`. Rows alone don't give the node type, `childCount`, or whether an expanded folder with an empty listing is expanded. It reads `nodesById` and the current mode's expanded set (`expanded`, or `filterExpanded[currentQueryKey]` while filtering). Left finds the parent through the row's `folderId`.
+  - Up/Down/Home/End move without wrapping and return `null` when already there. With no active row, Down/Home go to the first row and Up/End to the last; empty rows return `null` for every key.
+  - Right expands a collapsed folder with children (an empty one is ignored, as before), or moves from an expanded folder to its first row, which may be its loading row. Left collapses an expanded folder; otherwise it searches back to the parent row, stopping at the first shallower row. Top-level rows return `null`.
+  - Enter/Space toggles a folder, selects a file, loads more on a load-more row and retries on an error row; a loading row does nothing. Delete acts only on node rows. Every key is O(1) except Left's parent search, and a node row missing from `nodesById` throws.
+  - Gates: format, typecheck and 433 unit tests (18 files, after the rebase onto T14) pass; `tree-keyboard.test.ts` has 39 tests. React Doctor reports no issues.
 
 ### T22: Virtual tree
 
