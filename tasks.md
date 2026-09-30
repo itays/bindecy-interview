@@ -119,7 +119,7 @@ flowchart TD
 | T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | done |
 | T05 | Domain types + API contract | 1 | T02 | W2 | done |
 | T06 | Domain filters | 1 | T05 | W3 | todo |
-| T07 | Domain format + sort | 1 | T05 | W3 | todo |
+| T07 | Domain format + sort | 1 | T05 | W3 | done |
 | T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | done |
 | T09 | Task-doc addendum | 1 | T02 | W2 | done |
 | T10 | Seeded generator + curated fixture | 2 | T05 | W3 | todo |
@@ -270,12 +270,18 @@ flowchart TD
 
 ### T07: Domain format + sort
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T05
 - **Read first:** `app/components/project-overview/file-tree-utils.ts:315-325`.
 - **Touch:** `app/features/file-explorer/domain/format.ts`, `sort.ts`, `format.test.ts`, `sort.test.ts`.
 - **Change:** port `formatFileSize`. Add `compareNodes` (folders first, then `localeCompare` on the lowercased name, then id) and `sortKey(node)` / `compareSortKeys` for the keyset cursor.
 - **Acceptance:** tests cover byte/KB/MB boundaries, folders before files, a tie broken by id, and case-insensitive order.
+- **Outcome:**
+  - `domain/format.ts`: `formatFileSize` ported unchanged (`B` below 1 KiB, `KB` below 1 MiB, otherwise `MB`, one fraction digit, `en` grouping). The old rounding quirk stays: 1 MiB − 1 byte formats as `1,024 KB`.
+  - `domain/sort.ts`: `SortKey = readonly [rank: 0 | 1, name: string, id: string]` (folder 0, file 1, lowercased name, id). It's plain JSON, so the mock backend can encode it as a base64 cursor; validate its shape when decoding.
+  - `compareNodes` is `compareSortKeys(sortKey(a), sortKey(b))`, so the listing order and the cursor order can't drift. Names compare with one module-level `Intl.Collator("en")` (a fixed locale keeps the order deterministic and is faster than `localeCompare` per call); the id tiebreak compares code units, so the order is total.
+  - Hot loops (sorting 5k siblings, binary search) should precompute keys once and call `compareSortKeys` directly, instead of allocating a tuple per comparison through `compareNodes`.
+  - Gates: format, typecheck and 56 unit tests (7 files) pass.
 
 ### T08: UI prep: ScrollArea `viewportRef` + category details
 
