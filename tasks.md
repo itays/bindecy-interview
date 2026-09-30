@@ -145,7 +145,7 @@ flowchart TD
 | T20 | Tree row components | 4 | T16, T19 | W8 | review |
 | T21 | Tree keyboard model | 4 | T16 | W6 | done |
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
-| T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | todo |
+| T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | review |
 | T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | todo |
 | T25 | Page cutover + delete old code | 5 | T22, T23, T24 | W10 | todo |
 | T26 | E2E: tree | 5 | T25 | W11 | todo |
@@ -618,7 +618,7 @@ flowchart TD
 
 ### T23: Preview port (`useNodeDetail`)
 
-- **Status:** todo
+- **Status:** review
 - **Depends on:** T07, T19
 - **Read first:** `app/components/project-overview/file-preview.tsx`, `file-preview.test.tsx`, `state/explorer-provider.tsx`.
 - **Touch:** `app/features/file-explorer/ui/preview/file-preview.tsx` (plus split per-category files if it exceeds ~250 lines), `ui/preview/use-node-detail.ts`, `ui/preview/file-preview.test.tsx`.
@@ -628,6 +628,14 @@ flowchart TD
   - Keep all current states: empty, loading, image/audio/video/document, media error, unsafe URL, open-file link. Add a "Couldn't load file details" state with Retry.
 - **Acceptance:** the ported preview tests pass against the new input, and a detail-fetch error shows a Retry that recovers.
 - **E2E:** not reachable before T25. T28 must cover every category's preview, the media-error fallback with "Open file", and the loading state while the detail request is pending. The "Couldn't load file details" state has no mock switch that fails `getNode`, so only the component test covers it.
+- **Outcome:**
+  - `ui/preview/use-node-detail.ts`: `useNodeDetail(selectedId)` returns `NodeDetailState`, a union on `status` (`idle | loading | success | error`) with `detail`, `error` (an `Error`; a non-`Error` rejection is wrapped) and a stable `retry`. `idle` means no selection; a selected id without a result is `loading` from the first render, so nothing flashes. The fetch runs in an effect keyed on `(api, id, attempt)` with its own `AbortController`; a new id or an unmount aborts it. An `AbortError`, or a failure after the abort, is never reported; a success that lands after the abort (the zero-latency mock ignores late aborts) still fills the cache but doesn't touch the state. The only state writes are the async settle and a render-time reset when the id changes (React's "adjusting state when a prop changes" pattern), so re-selecting a file that failed earlier loads it again instead of showing the old error. `retry` only acts in the `error` state.
+  - Cache: an LRU of `NODE_DETAIL_CACHE_SIZE = 20` successful details per API instance (a module `WeakMap` keyed by the `api` from `useApi()`, deviation: the provider isn't in the Touch list), so providers and tests never share entries. A hit shows at once with no request and refreshes recency; errors aren't cached. No invalidation after CRUD: nodes are immutable (no rename or update API), created nodes get new ids and deleted ids are never reused (T13), and a delete clears the selection (T18), so a stale entry can't be shown. Only a folder detail's counts could go stale, and the preview never renders folders.
+  - `ui/preview/file-preview.tsx` exports `FilePreview` (no props: reads `selectedId` with `useExplorer` and calls `useNodeDetail`) and the presentational `FileDetailPreview({ detail: FileDetail })`, plus `GENERIC_DETAIL_ERROR`. The header path is the ancestor names plus the file name, joined with ` / ` as before. All the old copy stays (headings, "Select a file to preview", media labels, fallbacks, "Open file"). New states: "Loading file details…" (`role="status"`, badge "Loading") while `getNode` is pending, and "Couldn't load file details" (`role="alert"`, badge "Unavailable") showing the `ApiError` message or `GENERIC_DETAIL_ERROR`, with a Retry button. A folder detail renders the empty state.
+  - The old 363-line file is split (deviation, as the Touch list allows): `preview-media.tsx` (the four media previews and `PreviewMedia`), `preview-fallback.tsx` (`OpenFileButton`, `LoadingPreview`, `PreviewFallback`) and `preview-url.ts` (`getHttpPreviewUrl`, kept out of the component files for Fast Refresh). Conditional classes use `cn` instead of template strings.
+  - For later tasks: T25 renders `<FilePreview />` inside the provider in place of the old `FilePreview location=…`. T28 can target "Loading file details…" as the status text while `getNode` is pending (a `?latency=` URL makes it visible). The mock has no switch that fails `getNode`, so the error state stays covered by component tests only.
+  - Tests: `file-preview.test.tsx` (15) ports the five old tests to `FileDetailPreview` and adds the ancestor path, the empty, loading and error states, Retry recovering, a generic message for a non-`ApiError`, aborting and ignoring the previous request on a new selection, a cache hit with no request, re-loading a file that failed before, clearing the selection, and a nested file from the real mock. `use-node-detail.test.tsx` (4) covers idle, LRU eviction at the 21st entry, abort on unmount and per-API isolation.
+  - Gates: format, typecheck and 467 unit tests (21 files) pass; build and `test:e2e` (1 spec, port 5223) pass. React Doctor (`--scope changed --base main`) reports 4 `duplicate-jsx-subtree` warnings, each a match against the old `app/components/project-overview/file-preview.tsx` this task ports; they go away when T25 deletes it.
 
 ### T24: Filter toolbar port (debounced)
 
