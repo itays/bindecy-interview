@@ -251,7 +251,7 @@ The detailed breakdown with dependencies, parallel waves and statuses lives in [
 | 3 — State | Store, flatten, loader, mutations, provider |
 | 4 — UI | Tree rows, keyboard model, virtual tree, preview port, toolbar port |
 | 5 — Cutover & features | Page cutover and old-code deletion, E2E suites, CRUD UI |
-| 6 — Proof & docs | Performance measurements at 1k/10k/100k, README and scaling write-up |
+| 6 — Proof & docs | Performance measurements at 1k/10k/100k, handover (docs moved to `docs/`, Cloudflare Pages deploy, screenshots), README and scaling write-up |
 
 ## Non-goals
 
@@ -267,3 +267,5 @@ The detailed breakdown with dependencies, parallel waves and statuses lives in [
 - [ ] 100k-node run: the DOM holds at most ~100 `treeitem` rows after opening the 5k folder; numbers recorded in the README.
 - [ ] No old `app/components/project-overview`, `app/data`, or `app/types` code remains.
 - [ ] README documents the architecture, state approach, API contract and scaling strategy.
+- [ ] The app is live on Cloudflare Pages, deployed from `main` after CI passes, and the README links to it.
+- [ ] `main` is tagged `v1.0-submission`.

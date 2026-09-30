@@ -95,9 +95,11 @@ flowchart TD
   T28 --> T31
   T30 --> T31
   T31 --> T32[T32 README + scaling]
+  T30 --> T33[T33 Handover: cleanup, deploy, screenshots]
+  T33 --> T32
 ```
 
-**Critical path:** T01 → T02 → T05 → T07 → T11 → T12 → T14 → T19 → T20 → T22 → T25 → T29 → T30 → T31 → T32.
+**Critical path:** T01 → T02 → T05 → T07 → T11 → T12 → T14 → T19 → T20 → T22 → T25 → T29 → T30 → T31 → T32. T33 runs beside T31 but waits on the Cloudflare secrets, so it can become the critical path.
 
 ## Waves (tasks within a wave can run in parallel worktrees)
 
@@ -116,7 +118,7 @@ flowchart TD
 | W10 | T25 | The app switches to the new feature here |
 | W11 | T26, T27, T28, T29 | E2E specs are separate files; T29 owns `tree-actions.tsx` |
 | W12 | T30 | |
-| W13 | T31 | |
+| W13 | T31, T33 | T33 moves this file to `docs/tasks.md`; the wave's status commit edits it there |
 | W14 | T32 | |
 
 ## Index
@@ -154,7 +156,8 @@ flowchart TD
 | T29 | CRUD: create UI | 5 | T25 | W11 | done |
 | T30 | CRUD: delete UI | 5 | T29 | W12 | done |
 | T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | todo |
-| T32 | README + scaling write-up | 6 | T31 | W14 | todo |
+| T32 | README + scaling write-up | 6 | T31, T33 | W14 | todo |
+| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | todo |
 
 ---
 
@@ -837,14 +840,67 @@ flowchart TD
 ### T32: README + scaling write-up
 
 - **Status:** todo
-- **Depends on:** T31
-- **Touch:** `README.md`, `plan.md` (tick the completion checklist).
-- **Change:** rewrite the Implemented behavior, Project structure and Commands sections (e2e scripts, mock URL params). Add:
-  - **Architecture:** the layers and the dependency direction.
-  - **State management:** D1, with the reasoning.
-  - **Data-access contract.**
-  - **Scaling to 10k+:** lazy listings, keyset paging, virtualization, per-row subscriptions, debounce and abort, the server-side query index, plus the next steps (a real search index, ETags / conditional requests, push invalidation over websockets, a Web Worker for the client-side mock, and TanStack Pacer's async queuer for bulk operations).
-  - A link to `docs/performance.md`.
+- **Depends on:** T31, T33
+- **Read first:** `docs/bindecy-task.md`, `docs/plan.md` (§Decision log, §Architecture, §Data-access interface), `docs/performance.md`, `api/mock/mock-config.ts`, `package.json` scripts.
+- **Touch:** `README.md`, `docs/plan.md` (tick the completion checklist).
+- **Change:** replace the README with a reviewer-first document of at most ~200 lines. Depth goes behind links to `docs/` or into `<details>` blocks; no section repeats `plan.md`. Sections, in order:
+  1. **Header:** title, one-line summary, CI badge, the live demo link from T33.
+  2. **Try it in 2 minutes:** preset links on the live URL built from the mock params: default (10k nodes), `?nodes=100000&latency=0` (scale), `?latency=1500` (loading and paging rows), `?failFirst=1` (error row and Retry). Then a 5-step tour: open Stock footage (~5k children) and scroll, filter by name, select a file to preview, create a folder, delete it.
+  3. **Screenshots:** the 3 images from T33 (`docs/images/`), each with a one-line caption.
+  4. **Requirements coverage:** a table with one row per brief scope item and addendum bullet: how it's met, plus the main file.
+  5. **Architecture:** the layer diagram from `plan.md` (`ui → state → api`, `domain` shared) and a short folder tree of `app/features/file-explorer/`.
+  6. **Main flows:** 3 Mermaid sequence diagrams, each in `<details>`:
+     - Expanding a folder: the loader dedupes, calls `listChildren`, and stores the keyset page; the status row triggers `loadMore` when it enters the virtualizer range.
+     - Applying a filter: debounce, abort of in-flight requests, `search` reveals the paths of the first hits, and a selected file that stops matching is cleared (D3).
+     - Create and delete: the API mutation clears the query index cache, then the state mutation updates listings, counts and selection.
+  7. **State and data contract:** D1 (one Zustand store plus the loader, not TanStack Query) in 3 bullets; the `FileExplorerApi` interface in `<details>`.
+  8. **Scaling to 10k+:** lazy listings, keyset paging, virtualization with fixed row heights, per-row subscriptions, debounce and abort, the server-side query index. The summary numbers from T31, with a link to `docs/performance.md`. Next steps: a real search index, ETags / conditional requests, push invalidation over websockets, a Web Worker for the mock (D4), and TanStack Pacer's async queuer for bulk operations.
+  9. **Where to look first:** 5 files with one line each: `file-explorer-api.ts`, `explorer-store.ts`, `loader.ts`, `mock-query-index.ts`, `virtual-tree.tsx`.
+  10. **Tech stack:** one compact table.
+  11. **Running locally:** prerequisite Bun 1.4 (with the install command, since the repo has only `bun.lock`), then `bun install`, `bun run dev`, `bun run test`, `bun run test:e2e`; a commands table; the mock URL params with their defaults and ranges.
+  12. **Tradeoffs and limitations:** in-memory data resets on reload, the mock runs on the main thread, previews load external URLs (w3.org, Unsplash, MDN), E2E runs in Chromium only.
+  13. **Process:** links to `docs/bindecy-task.md`, `docs/plan.md` (decision log D1–D12) and `docs/tasks.md`.
 
-  Remove the Expand all line and the "no API" wording.
-- **Acceptance:** every command in the README runs as documented. The plan's checklist is ticked.
+  Drop the Expand all line and the "no API" wording.
+
+  After the PR merges: tag `main` as `v1.0-submission` and push the tag, then confirm the production deploy of that commit. Draft the reviewer message (not committed): live URL, the tag's tree link, where to look first, what's out of scope, time spent versus the 120-minute brief and why the addendum widened the scope.
+- **Acceptance:**
+  - Every command in the README runs as documented on a clean clone.
+  - Every preset link opens the described state on the live URL.
+  - The Mermaid diagrams and images render on GitHub (check the PR's rich diff).
+  - The README is at most ~200 lines.
+  - The plan's checklist is ticked.
+
+### T33: Handover: cleanup, Cloudflare deploy, screenshots
+
+- **Status:** todo
+- **Depends on:** T30
+- **Read first:** `.github/workflows/ci.yml`, `react-router.config.ts`, `playwright.config.ts`, the current `cloudflare/wrangler-action` and Cloudflare Pages "Direct Upload" docs.
+- **Touch:** `Dockerfile`, `.dockerignore`, `bindecy-task.md`, `plan.md`, `tasks.md`, `show-me-refactor-plan.html` (all moved into `docs/`), `README.md` (the `plan.md` link only), `.github/workflows/ci.yml`, `scripts/capture-screenshots.ts`, `docs/images/*`.
+- **Change:**
+  1. **Cleanup.** Delete `Dockerfile` and `.dockerignore`: the Dockerfile runs `npm ci` without a `package-lock.json`, and its final stage omits the dev dependency `vite` that `start` needs. `git mv` the brief, `plan.md`, `tasks.md` and `show-me-refactor-plan.html` into `docs/`. Their links to each other are relative, so they keep working. Point the README's `plan.md` link at `docs/plan.md`.
+  2. **One-time Cloudflare setup (repo owner, manual).**
+     - Create a Pages project for Direct Upload: `bunx wrangler pages project create bindecy-interview --production-branch=main`. If the name is taken, the `*.pages.dev` subdomain gets a suffix; use the URL that Cloudflare reports.
+     - Create an API token with the *Account › Cloudflare Pages › Edit* permission.
+     - Store the token and the account ID as the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (`gh secret set`).
+
+     The task is `blocked` until the secrets exist.
+  3. **Deploy job** in `ci.yml`:
+     - `checks` uploads `build/client` as an artifact after the Build step, so the deploy ships the exact build that passed the gates.
+     - A `deploy` job with `needs: checks` downloads the artifact and runs `cloudflare/wrangler-action@v3` with `pages deploy build/client --project-name=bindecy-interview --branch=<branch>`. Pushes to `main` deploy to production (`--branch=main`); same-repo PRs get a preview deploy (`--branch=${{ github.head_ref }}`). PRs from forks skip the job, since they have no secrets.
+     - Write the `deployment-url` output to the job summary.
+     - Don't add `wrangler` to `package.json`; the action installs it.
+
+     SPA routing needs no config: `build/client` has no `404.html`, so Pages serves `index.html` for unknown paths.
+  4. **Repo metadata.** Once production is live, set the homepage and update the outdated description: `gh repo edit --homepage <url> --description "…"`.
+  5. **Screenshots.** Add `scripts/capture-screenshots.ts`, run with `bun scripts/capture-screenshots.ts <baseURL>`, which uses `chromium` from `@playwright/test`. It lives outside `e2e/`, so neither Playwright nor Vitest collects it. Every shot uses `?seed=1&latency=0` and waits for the preview media to load. Write PNGs to `docs/images/`, each under ~300 KB:
+     - `explorer-desktop.png` (1440×900): Launch campaign › Photography selects expanded, `hero-dusk.jpg` previewed.
+     - `filter-active.png` (1440×900): an active name filter with auto-expanded paths and the "Showing X of Y files" status.
+     - `mobile.png` (390×844): the stacked layout, or the create dialog if it reads better.
+- **Acceptance:**
+  - No Docker files remain. The four documents are in `docs/`, and their links resolve on GitHub.
+  - A push to `main` deploys only after `checks` passes, and the production URL serves the app. `/?nodes=100000&latency=0` loads, and an unknown path returns the app.
+  - A same-repo PR gets a preview URL in the job summary.
+  - The repo homepage points at the production URL.
+  - `docs/images/` holds the 3 screenshots, and the script regenerates them.
+  - `actionlint` reports no findings. Gates: format, typecheck, test, build.
