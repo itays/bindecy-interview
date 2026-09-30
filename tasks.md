@@ -142,7 +142,7 @@ flowchart TD
 | T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | done |
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | done |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | done |
-| T20 | Tree row components | 4 | T16, T19 | W8 | todo |
+| T20 | Tree row components | 4 | T16, T19 | W8 | review |
 | T21 | Tree keyboard model | 4 | T16 | W6 | done |
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
 | T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | todo |
@@ -558,7 +558,7 @@ flowchart TD
 
 ### T20: Tree row components
 
-- **Status:** todo
+- **Status:** review
 - **Depends on:** T16, T19
 - **Read first:** `app/components/project-overview/tree-node.tsx:124-260` (current row markup and styles), `state/visible-rows.ts`, `state/explorer-provider.tsx` (hooks), `ui/file-category-details.ts`.
 - **Touch:** `app/features/file-explorer/ui/tree/tree-row.tsx`, `tree-row.test.tsx`.
@@ -570,6 +570,20 @@ flowchart TD
   - Each row has `id="tree-row-{key}"`, `role="treeitem"` and the aria-level, posinset, setsize, expanded and selected attributes. Rows are not focusable; the container owns focus.
 - **Acceptance:** component tests cover the accessible name and state for folder and file rows, selected and expanded states exposed through ARIA (not classes), the load-more row requesting the next page on mount, and Retry calling `loader.retry`.
 - **E2E:** not reachable before T25. T26 must cover folder and file rows (accessible name, `aria-expanded`, `aria-selected`), the "Loading…" row, the "Loading more… N of M" row, and the error row with Retry.
+- **Outcome:**
+  - `ui/tree/tree-row.tsx` exports `TreeRow`, `TreeRowProps` and `treeRowId(key)` (`tree-row-<key>`, for T22's `aria-activedescendant`). Props: `row`, plus optional `style` and `className` (positioning from the virtualizer; the row sets its own `height` from `ROW_HEIGHT` and ignores any passed `height`) and `onActivate(row)`, called on click. T22 renders `<TreeRow key={row.key} row={row} style={…} onActivate={…} />`; setting the row active and toggling or selecting stays in T22.
+  - `TreeRow` is `memo`'d with a comparator that compares `row` and `style` shallowly (`flattenVisibleRows` builds new row objects on every run and the virtualizer a new `style` per render) and `className`/`onActivate` by identity, so T22 must keep `onActivate` stable. A new prop must be added to the comparator.
+  - Node rows keep the old visual design (chevron, folder/open-folder icon, category icon and badge, `formatFileSize` line, check icon when selected, the `aria-selected`/`aria-expanded` backgrounds). Each row reads its node plus `isExpanded`, `isSelected`, `isActive` and `isFiltering` with one `useExplorer` selector of values, so it re-renders only when its own state changes; expansion comes from `expanded`, or `filterExpanded[currentQueryKey]` while filtering (as in T21). A node missing from `nodesById` throws, like T16 and T21. Status rows subscribe only to `isActive`.
+  - Activity: a row is active when `activeId === row.key` (a node row's key is its id; a status row's is its slot key `status:<folderKey>`). The active row shows an inset `outline-ring` outline only while the tree container is `:focus-visible` (`group-data-active/tree-row:in-focus-visible:`), so the ring follows keyboard focus the way the old focused buttons did. `data-active` is set on the active `treeitem`.
+  - Folder count: `fileCount`, or `matchCount` while filtering; a folder without `matchCount` under a query shows no count rather than a count from another query. The number is visual only (`aria-hidden`), and an `sr-only` suffix gives the accessible name, e.g. "Brand system (3 files)" or "Brand system (1 matching file)". File rows are named "brand-guidelines.pdf 4.6 MB Document". Explicit `{" "}` text nodes keep the words apart in the accessible name (jsdom doesn't lay out the flex children; the space isn't rendered).
+  - Indentation: `depth` spans of 24 px, each drawing a `border-border` line 16 px in (the old `ml-4 border-l pl-2`). Rows have no gaps (the content keeps a 1 px margin), so the segments form continuous guides.
+  - ARIA: `role="treeitem"`, `aria-level = depth + 1`, no `tabIndex`. Node rows set `aria-posinset`/`aria-setsize` (the listing's `total`). `aria-expanded` only on folders with `childCount > 0` (an empty folder is a leaf, as before and as in T21's Right key).
+  - `aria-selected` only on file rows (deviation): folders and status rows can't be selected, and the APG leaves `aria-selected` off items that aren't selectable (the old tree did the same). Status rows have no `aria-posinset`/`aria-setsize` (deviation): they aren't members of the listing, and giving them `total + 1` would announce a wrong set size.
+  - Status rows: `LoadingRow` (spinner, "Loading…"); `LoadMoreRow` ("Loading more… 1,100 of 5,000", `Intl.NumberFormat("en")`) calls `loader.loadMore(folderId)` in an effect keyed on `loader`, `folderId` and `loaded`, so it requests again after each page lands while the row stays in the rendered range (a row that stays mounted would otherwise stall; the loader dedupes); `ErrorRow` ("Couldn't load {folder name}", "Couldn't load project files" for the top level, the error `message` as the text's `title`) with a Retry button calling `loader.retry(folderId)`.
+  - Retry is `tabIndex={-1}` and prevents the default on `mousedown`: the tree is one tab stop with `aria-activedescendant`, so a focusable button inside it would add a second one and a click would take focus away from the container. Keyboard users retry with Enter/Space on the active error row (T21's `retry` action). The click still bubbles to `onActivate`.
+  - For later tasks: T22 passes a stable `onActivate` and `style` for positioning; no `measureElement` is needed (fixed heights). A click on a status row reaches `onActivate` too, so T22 decides whether it only activates or also loads/retries (the loader dedupes a double retry). T26 can target rows by `#tree-row-<key>` and by accessible name.
+  - Smoke: a throwaway route (removed) rendered the rows in Chromium with the URL mock: continuous guides, selected file ring and check, loading row, the load-more row counting up to "Loading more… 900 of 5,000" while it stayed rendered, the error row, Retry recovering with `failFirst=2` on the second click, and focus staying on the tree container after clicking Retry. The active outline showed only after keyboard focus.
+  - Gates: format, typecheck, 455 unit tests (20 files; `tree-row.test.tsx` has 7), build and `test:e2e` (1 passed, port 5220) pass. React Doctor (`--scope changed`): 96/100, one warning, `only-export-components` for `treeRowId` in a component file (Fast Refresh only; kept here because the Touch list has no other module for it).
 
 ### T21: Tree keyboard model
 
