@@ -154,7 +154,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 | T30 | CRUD: delete UI | 5 | T29 | W12 | done |
 | T31 | Performance proof | 6 | T26, T27, T28, T30 | W13 | dropped |
 | T32 | README + scaling write-up | 6 | T33 | W14 | todo |
-| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | blocked |
+| T33 | Handover: cleanup, Cloudflare deploy, screenshots | 6 | T30 | W13 | review |
 
 ---
 
@@ -861,7 +861,7 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
 
 ### T33: Handover: cleanup, Cloudflare deploy, screenshots
 
-- **Status:** blocked
+- **Status:** review
 - **Depends on:** T30
 - **Read first:** `.github/workflows/ci.yml`, `react-router.config.ts`, `playwright.config.ts`, the current `cloudflare/wrangler-action` and Cloudflare Pages "Direct Upload" docs.
 - **Touch:** `Dockerfile`, `.dockerignore`, `bindecy-task.md`, `plan.md`, `tasks.md`, `show-me-refactor-plan.html` (all moved into `docs/`), `README.md` (the `plan.md` link only), `.github/workflows/ci.yml`, `scripts/capture-screenshots.ts`, `docs/images/*`.
@@ -898,4 +898,5 @@ T31 (performance proof) was dropped: T32's scaling section describes the perform
   - Screenshots: `scripts/capture-screenshots.ts <baseURL>` captures the three PNGs in light mode with reduced motion, waiting until the preview's loading status is gone and no "preview unavailable" fallback shows. Sizes: `explorer-desktop.png` 233 KB, `filter-active.png` 77 KB (name filter `interview`, `arden-interview.mp3` previewed), `mobile.png` 105 KB (the stacked layout scrolled to the tree card, `primary-mark.png` selected).
   - Checks: `actionlint` 1.7.12 reports no findings; format, typecheck, 481 unit tests (22 files) and build pass.
   - Pages project (deviation): named `file-explorer-task` instead of `bindecy-interview`, so production is `https://file-explorer-task.pages.dev`; `ci.yml` and step 2 above use that name.
-  - Blocked on the rest of step 2: the repo has no `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` secret yet. Once they're set, what's left is the first deploy run, checking the production and preview URLs, and `gh repo edit --homepage`.
+  - Preview deploy: on [PR #18](https://github.com/itays/bindecy-interview/pull/18) `checks` passed in 1m19s and `deploy` in 26s, publishing `https://0cd3e1a2.file-explorer-task.pages.dev` and the branch alias `https://refactor-w13-handover.file-explorer-task.pages.dev`, both in the job summary. On the alias, `/`, `/?nodes=100000&latency=0` and `/does-not-exist` return 200 with the app shell, and Chromium at 100k nodes shows "Showing all 91,418 files." with 5 top-level rows and no page errors.
+  - Left after the merge: check the production deploy of `main`, then `gh repo edit --homepage https://file-explorer-task.pages.dev` and a new description.
