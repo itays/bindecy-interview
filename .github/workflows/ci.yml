@@ -38,6 +38,16 @@ jobs:
       - name: Build
         run: bun run build
 
+      # The deploy job ships this exact build, so it never deploys one that
+      # skipped the gates above.
+      - name: Upload the client build
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-build
+          path: build/client/
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
 
@@ -54,3 +64,40 @@ jobs:
             test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  deploy:
+    needs: checks
+    # Pushes to main deploy to production; same-repo PRs get a preview.
+    # PRs from forks have no access to the secrets.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: client-build
+          path: build/client
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy build/client
+            --project-name=bindecy-interview
+            --branch=${{ github.head_ref || 'main' }}
+            --commit-hash=${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Write the deployment URL to the job summary
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+          ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+        run: |
+          {
+            echo "### Cloudflare Pages"
+            echo ""
+            echo "- Deployment: $DEPLOYMENT_URL"
+            if [ -n "$ALIAS_URL" ]; then echo "- Branch alias: $ALIAS_URL"; fi
+          } >> "$GITHUB_STEP_SUMMARY"

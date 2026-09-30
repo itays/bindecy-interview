@@ -104,4 +104,4 @@ The page container owns filters, folder expansion, and file selection. Filtering
 - Filter controls have persistent labels, and result updates are announced through a polite live region.
 - Styling uses the application's semantic light and dark theme tokens rather than component-specific color overrides.
 
-The detailed implementation plan, assumptions, acceptance criteria, and test matrix are documented in [`plan.md`](./plan.md).
+The detailed implementation plan, assumptions, acceptance criteria, and test matrix are documented in [`docs/plan.md`](./docs/plan.md).
