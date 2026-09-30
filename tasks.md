@@ -117,7 +117,7 @@ flowchart TD
 | T02 | Playwright setup + smoke test | 0 | T01 | W1 | done |
 | T03 | CI workflow | 0 | T02 | W2 | done |
 | T04 | Install runtime deps + shadcn CRUD components | 1 | T02 | W2 | todo |
-| T05 | Domain types + API contract | 1 | T02 | W2 | todo |
+| T05 | Domain types + API contract | 1 | T02 | W2 | done |
 | T06 | Domain filters | 1 | T05 | W3 | todo |
 | T07 | Domain format + sort | 1 | T05 | W3 | todo |
 | T08 | UI prep: ScrollArea `viewportRef` + category details | 1 | T02 | W2 | todo |
@@ -233,7 +233,7 @@ flowchart TD
 
 ### T05: Domain types + API contract
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T02
 - **Read first:** `plan.md` §Data-access interface, `app/types/project-node.ts`.
 - **Touch:** `app/features/file-explorer/domain/types.ts`, `app/features/file-explorer/api/file-explorer-api.ts`.
@@ -241,6 +241,12 @@ flowchart TD
   - Define `FileCategory`, `FilterCategory` (`audio | image | video`), `FileSummary`, `FolderSummary`, `NodeSummary` (with `parentId`), `NodeDetail` (with `ancestors: {id, name}[]` and `previewUrl`), `FileQuery`, `Page<T>`, `SearchHit`, `ROOT_ID`/null root convention, and `ApiError` with codes (`network`, `not-found`, `conflict`, `validation`).
   - Define the `FileExplorerApi` interface exactly as in plan.md, with a JSDoc on each method describing paging and cursor semantics.
 - **Acceptance:** typecheck passes. Types and interface only, no runtime logic except the `ApiError` class.
+- **Outcome:**
+  - `domain/types.ts`: `FileCategory` keeps the fixture values (`audio | video | image | doc`); `FilterCategory = Exclude<FileCategory, "doc">`. `FileQuery = {name, minBytes, maxBytes, categories}` with the name trimmed, byte bounds inclusive and `null` meaning open-ended. `NodeDetail = FolderDetail | FileDetail`; only `FileDetail` carries `previewUrl`, and `ancestors` run from the top-level folder down to the parent. `SearchHit = FileSummary & {ancestorIds}`.
+  - Root convention: the API uses `null` for the root; `ROOT_ID = "root"` is the key for the root listing in id-keyed maps (fixture ids are `folder-*`/`file-*`, so no collision).
+  - `api/file-explorer-api.ts`: named request/input types (`ListChildrenRequest`, `SearchRequest`, `StatsRequest`, `CreateFolderInput`, `CreateFileInput`) with the plan's shapes; JSDoc fixes the order, cursor stability, abort (`DOMException` `"AbortError"`) and which `ApiError` code each method rejects with. `search` returns hits in tree order so the first ~50 hits reveal the top of the tree (D2).
+  - `ApiError` lives in `api/` rather than `domain/`: it's part of the transport contract, and `domain/` stays error-free.
+  - Gates: format, typecheck and 34 unit tests pass.
 
 ### T06: Domain filters
 
