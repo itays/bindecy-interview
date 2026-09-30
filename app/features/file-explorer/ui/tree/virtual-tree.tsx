@@ -28,8 +28,14 @@ const TREE_PADDING = 8
  * The container owns focus and points `aria-activedescendant` at the active
  * row, which is always rendered, so focus survives scrolling and rows
  * unmounting. Only the rows in range (plus overscan) are in the DOM.
+ * Without `onDeleteRequest` the Delete key is left to the browser.
  */
-export function VirtualTree() {
+export function VirtualTree({
+  onDeleteRequest,
+}: {
+  /** The Delete key on a node row; the owner confirms before deleting. */
+  onDeleteRequest?: (id: string) => void
+}) {
   const store = useExplorerStore()
   const loader = useLoader()
   const rows = useVisibleRows()
@@ -101,8 +107,9 @@ export function VirtualTree() {
     const state = store.getState()
     const action = resolveTreeKey(rows, activeIndex, event.key, state)
 
-    // Delete opens the confirmation that arrives with the CRUD actions (T30).
-    if (action === null || action.type === "delete") return
+    if (action === null || (action.type === "delete" && !onDeleteRequest)) {
+      return
+    }
 
     event.preventDefault()
 
@@ -121,6 +128,9 @@ export function VirtualTree() {
         break
       case "retry":
         void loader.retry(action.folderId)
+        break
+      case "delete":
+        onDeleteRequest?.(action.id)
         break
     }
 
