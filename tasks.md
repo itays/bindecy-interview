@@ -147,7 +147,7 @@ flowchart TD
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | done |
 | T23 | Preview port (`useNodeDetail`) | 4 | T07, T19 | W8 | done |
 | T24 | Filter toolbar port (debounced) | 4 | T06, T19 | W8 | done |
-| T25 | Page cutover + delete old code | 5 | T22, T23, T24 | W10 | todo |
+| T25 | Page cutover + delete old code | 5 | T22, T23, T24 | W10 | done |
 | T26 | E2E: tree | 5 | T25 | W11 | todo |
 | T27 | E2E: filters + selection clearing | 5 | T25 | W11 | todo |
 | T28 | E2E: preview | 5 | T25 | W11 | todo |
@@ -677,7 +677,7 @@ flowchart TD
 
 ### T25: Page cutover + delete old code
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T22, T23, T24
 - **Read first:** `app/components/project-overview/project-overview.tsx` (layout and header markup), `app/routes/home.tsx`, `e2e/smoke.e2e.ts`.
 - **Touch:**
@@ -686,6 +686,12 @@ flowchart TD
 - **Change:** `FileExplorer` renders `ExplorerProvider` with the header, the filter toolbar, and the grid holding `TreePanel` and the preview (same layout classes as today), and the route renders it. Delete the old feature code and its tests. Update the smoke test only if a selector changed; the flows stay the same.
 - **Acceptance:** all gates plus `build` and `test:e2e` pass. No imports of the deleted paths remain (`rg` shows none). A manual check at 1280 px and 390 px: layout unchanged, no horizontal overflow.
 - **E2E:** after the cutover, `e2e/smoke.e2e.ts` exercises the new explorer with the same flows (expand "Brand system", select `brand-guidelines.pdf`, see the preview, no page errors). It runs with the default mock config and its 250 ms latency, so it waits with web-first assertions, never fixed timeouts. The full `bun run test:e2e` passes.
+- **Outcome:**
+  - `ui/file-explorer.tsx` exports `FileExplorer`: `ExplorerProvider` (the URL-configured mock) around the old page markup, copied unchanged (`main`, the `grid-rows-[auto_auto_1fr]` container, the header with "Northstar campaign", "Project overview" and the "Creative workspace" badge), then `<FilterToolbar />` and the `md:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]` grid with `<TreePanel />` and `<FilePreview />`. `routes/home.tsx` renders it; the page title and meta are unchanged.
+  - Deleted `app/components/project-overview/` (including the T23 preview adapter and the old tests), `app/data/project-files.ts` and `app/types/project-node.ts`, which left `app/data/` and `app/types/` empty. `rg` finds no imports of the deleted paths; the only mentions left are `README.md` (T32 rewrites it) and history in this file and `plan.md`.
+  - Smoke spec: one selector-free change. The old tree started with the top-level folders expanded; the new one starts collapsed (browse `expanded` is empty) and loads a folder's children on expand. The spec now asserts `aria-expanded="false"` first, then expand, collapse, expand, select `brand-guidelines.pdf` and see its heading, all with web-first assertions against the default 250 ms latency.
+  - Layout check (Chromium, dev server, nothing selected): at 1280×900 the header (1232×72), filter card (1232×205) and the tree/preview columns (352 and 864 wide, at the same x/y) match the old page; the columns are 544 px tall instead of 547 (the old tree showed 10 rows with the top-level folders expanded, the new one 4 collapsed folders and a file). At 390 px every card's box matches the old page exactly (358 wide, stacked in DOM order), and `scrollWidth` equals the viewport at both sizes.
+  - Gates: format, typecheck, 456 unit tests (20 files; the 4 old test files are gone), build and `test:e2e` (1 passed, port 5225; `--repeat-each=3` passed). React Doctor (`--scope changed --base main`) reports no issues.
 
 ### T26: E2E: tree
 
