@@ -141,7 +141,7 @@ flowchart TD
 | T16 | Visible rows (flatten) | 3 | T15 | W5 | done |
 | T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | done |
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | done |
-| T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | todo |
+| T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | done |
 | T20 | Tree row components | 4 | T16, T19 | W8 | todo |
 | T21 | Tree keyboard model | 4 | T16 | W6 | done |
 | T22 | Virtual tree | 4 | T08, T20, T21 | W9 | todo |
@@ -531,7 +531,7 @@ flowchart TD
 
 ### T19: Explorer provider + hooks
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T14, T17, T18
 - **Read first:** exports of `mock-file-explorer-api.ts`, `mock-config.ts`, `explorer-store.ts`, `loader.ts`, `mutations.ts`.
 - **Touch:** `app/features/file-explorer/state/explorer-provider.tsx`, `explorer-provider.test.tsx`, `app/test/setup.ts` (element-size mocks for the virtualizer).
@@ -541,6 +541,16 @@ flowchart TD
   - `renderWithExplorer(ui, { api })` is a test helper using a zero-latency mock.
   - `setup.ts` mocks `offsetHeight`/`getBoundingClientRect` (and `ResizeObserver` if needed) so `@tanstack/react-virtual` renders rows in jsdom.
 - **Acceptance:** a component test mounts the provider with a small seeded mock and sees the root listing loaded into the store. The existing tests stay green with the setup changes.
+- **Outcome:**
+  - `state/explorer-provider.tsx` exports `ExplorerProvider` and the hooks. The provider creates the API (the URL-configured mock when no `api` prop is given; the prop is read once), the store, the loader and the mutations once per mount. Its mount effect calls `ensureChildren(null)` and `loadStats()`; its cleanup calls `loader.dispose()`, which aborts every request.
+  - StrictMode: the loader handed out is restartable. `dispose` ends the current `createLoader` instance and the next call creates a new one on the same store, so StrictMode's mount → cleanup → mount still loads the root (the new instance re-sends the orphaned first page, T17). A test fails when the restart is removed.
+  - `useMutations()` wraps T18's commands: each success calls `loader.loadStats()` without awaiting it, and a failure reaches the caller unchanged with no stats request.
+  - Hooks: `useExplorer(selector)` (`useStore` + `useShallow`; select values, not `nodesById` or a set, since shallow equality walks a changed `Map`/`Set`), `useLoader()`, `useMutations()`, `useApi()`. Each throws a plain `Error` outside the provider.
+  - Added (deviation): `useVisibleRows()` gives `flattenVisibleRows` memoized on `nodesById`, `listings`, `expanded`, `filterExpanded` and `appliedQuery` (the T16 note), so selection, focus and stats updates keep the same array. `useExplorerStore()` gives the store for `getState()` in event handlers, which T22 needs for `resolveTreeKey` and `rowHeight`.
+  - `renderWithExplorer(ui, { api })` lives in `app/test/render-with-explorer.tsx` (deviation: kept out of the production module). It defaults to the default-seed mock with `latency: 0` and returns the render result plus `api`.
+  - `setup.ts` (deviation): virtual-core 3.17 reads the scroll element's and rows' `offsetWidth`/`offsetHeight`, not `getBoundingClientRect`. The mock returns an element's inline `style` width/height, else 1024 × 768. A throwaway 5,000-row `useVirtualizer` list rendered a bounded window with the mock and failed without it. The existing `ResizeObserver` stub is enough.
+  - For later tasks: T20/T22 read rows with `useVisibleRows()` and state with `useExplorerStore().getState()` inside handlers and `estimateSize`. Rows use fixed heights (D10); a row measured with `measureElement` reports its inline height in jsdom.
+  - Gates: format, typecheck, 448 unit tests (19 files), build and `test:e2e:smoke` pass; `explorer-provider.test.tsx` has 15 tests. React Doctor reports no issues.
 
 ---
 
