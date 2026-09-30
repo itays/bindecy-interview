@@ -139,12 +139,26 @@ function DetailError({
   )
 }
 
-/** The preview card for one loaded file: its path, metadata and media. */
-export function FileDetailPreview({ detail }: { detail: FileDetail }) {
-  const category = fileCategoryDetails[detail.category]
+/** The file fields the preview shows; a `FileDetail` has them all. */
+export type PreviewedFile = Pick<
+  FileDetail,
+  "id" | "name" | "category" | "sizeInBytes" | "previewUrl"
+>
+
+/**
+ * The preview card for one file: its path, metadata and media. `path` runs
+ * from the top-level folder down to the file name.
+ */
+export function SelectedFilePreview({
+  file,
+  path,
+}: {
+  file: PreviewedFile
+  path: readonly string[]
+}) {
+  const category = fileCategoryDetails[file.category]
   const CategoryIcon = category.icon
-  const safeUrl = getHttpPreviewUrl(detail.previewUrl)
-  const path = [...detail.ancestors.map((folder) => folder.name), detail.name]
+  const safeUrl = getHttpPreviewUrl(file.previewUrl)
 
   return (
     <PreviewCard path={path.join(" / ")} badge={category.label} selected>
@@ -155,23 +169,38 @@ export function FileDetailPreview({ detail }: { detail: FileDetail }) {
               <CategoryIcon aria-hidden="true" className="size-4" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate font-medium" title={detail.name}>
-                {detail.name}
+              <h2 className="truncate font-medium" title={file.name}>
+                {file.name}
               </h2>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>{category.label}</span>
                 <span aria-hidden="true">·</span>
-                <span>{formatFileSize(detail.sizeInBytes)}</span>
+                <span>{formatFileSize(file.sizeInBytes)}</span>
               </div>
             </div>
           </div>
-          {safeUrl && detail.category !== "doc" ? (
+          {safeUrl && file.category !== "doc" ? (
             <OpenFileButton url={safeUrl} />
           ) : null}
         </div>
         <Separator />
-        <PreviewMedia key={`${detail.id}:${detail.previewUrl}`} file={detail} />
+        <PreviewMedia key={`${file.id}:${file.previewUrl}`} file={file} />
       </div>
+    </PreviewCard>
+  )
+}
+
+/** The preview card for a loaded file detail; the path comes from its ancestors. */
+export function FileDetailPreview({ detail }: { detail: FileDetail }) {
+  const path = [...detail.ancestors.map((folder) => folder.name), detail.name]
+  return <SelectedFilePreview file={detail} path={path} />
+}
+
+/** The preview card with nothing selected. */
+export function NoSelectionPreview() {
+  return (
+    <PreviewCard path={null} badge="No selection" selected={false}>
+      <EmptyPreview />
     </PreviewCard>
   )
 }
@@ -201,9 +230,5 @@ export function FilePreview() {
       break
   }
 
-  return (
-    <PreviewCard path={null} badge="No selection" selected={false}>
-      <EmptyPreview />
-    </PreviewCard>
-  )
+  return <NoSelectionPreview />
 }

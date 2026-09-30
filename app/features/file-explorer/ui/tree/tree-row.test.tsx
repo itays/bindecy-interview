@@ -23,7 +23,8 @@ import type { ExplorerStoreApi } from "~/features/file-explorer/state/explorer-s
 import type { Loader } from "~/features/file-explorer/state/loader"
 import { renderWithExplorer } from "~/test/render-with-explorer"
 
-import { TreeRow, treeRowId } from "./tree-row"
+import { TreeRow } from "./tree-row"
+import { treeRowId } from "./tree-row-id"
 
 type Handles = { store: ExplorerStoreApi; loader: Loader }
 

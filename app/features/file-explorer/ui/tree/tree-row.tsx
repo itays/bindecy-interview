@@ -37,12 +37,9 @@ import type {
 } from "~/features/file-explorer/state/visible-rows"
 import { fileCategoryDetails } from "~/features/file-explorer/ui/file-category-details"
 
-const countFormatter = new Intl.NumberFormat("en")
+import { treeRowId } from "./tree-row-id"
 
-/** DOM id of a row, for the tree's `aria-activedescendant`. */
-export function treeRowId(key: string): string {
-  return `tree-row-${key}`
-}
+const countFormatter = new Intl.NumberFormat("en")
 
 export type TreeRowProps = {
   row: Row

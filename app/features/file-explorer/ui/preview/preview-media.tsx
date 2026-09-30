@@ -13,7 +13,10 @@ import { getHttpPreviewUrl } from "./preview-url"
 
 type PreviewStatus = "loading" | "ready" | "error"
 
-type MediaPreviewProps = { file: FileDetail; url: string }
+/** The file fields the media previews read. */
+type MediaFile = Pick<FileDetail, "name" | "category" | "previewUrl">
+
+type MediaPreviewProps = { file: MediaFile; url: string }
 
 function ImagePreview({ file, url }: MediaPreviewProps) {
   const [status, setStatus] = useState<PreviewStatus>("loading")
@@ -170,7 +173,7 @@ function DocumentPreview({ file, url }: MediaPreviewProps) {
  * The preview element for the file's category. Key it by the file id and
  * URL so a different file starts from the loading state.
  */
-export function PreviewMedia({ file }: { file: FileDetail }) {
+export function PreviewMedia({ file }: { file: MediaFile }) {
   const safeUrl = getHttpPreviewUrl(file.previewUrl)
 
   if (!safeUrl) {
