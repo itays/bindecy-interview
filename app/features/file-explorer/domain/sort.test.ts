@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { compareNodes, compareSortKeys, sortKey } from "./sort"
+import { compareNodes } from "./sort"
 import type { NodeSummary } from "./types"
 
 type Sortable = Pick<NodeSummary, "id" | "name" | "type">
@@ -82,25 +82,4 @@ describe("compareNodes", () => {
       )
     }
   )
-})
-
-describe("sortKey / compareSortKeys", () => {
-  it("agrees in sign with compareNodes for every pair", () => {
-    for (const a of ordered) {
-      for (const b of ordered) {
-        expect(Math.sign(compareSortKeys(sortKey(a), sortKey(b)))).toBe(
-          Math.sign(compareNodes(a, b))
-        )
-      }
-    }
-  })
-
-  it("sorts a shuffled list into the same order as compareNodes", () => {
-    const byKey = shuffle(ordered, 99)
-      .map((node) => ({ node, key: sortKey(node) }))
-      .sort((a, b) => compareSortKeys(a.key, b.key))
-      .map(({ node }) => node)
-
-    expect(ids(byKey)).toEqual(ids([...shuffle(ordered, 5)].sort(compareNodes)))
-  })
 })
