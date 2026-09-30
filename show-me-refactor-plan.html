@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>File Explorer — Scale Refactor Plan</title>
+<style>
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --radius: 0.625rem;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: oklch(0.145 0 0);
+      --foreground: oklch(0.985 0 0);
+      --card: oklch(0.205 0 0);
+      --primary: oklch(0.922 0 0);
+      --primary-foreground: oklch(0.205 0 0);
+      --secondary: oklch(0.269 0 0);
+      --muted: oklch(0.269 0 0);
+      --muted-foreground: oklch(0.708 0 0);
+      --accent: oklch(0.269 0 0);
+      --destructive: oklch(0.704 0.191 22.216);
+      --border: oklch(1 0 0 / 10%);
+      --ring: oklch(0.556 0 0);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
+  :not(pre) > code {
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 0.35rem;
+    padding: 0.05rem 0.35rem;
+    overflow-wrap: anywhere;
+  }
+  pre {
+    margin: 0;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  .kw { color: var(--muted-foreground); }
+  .cm { color: var(--muted-foreground); font-style: italic; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 4rem;
+  }
+  @media (min-width: 64rem) {
+    .layout { grid-template-columns: 14rem minmax(0, 1fr); padding: 2.5rem 2rem 5rem; }
+  }
+  nav.toc { display: none; }
+  @media (min-width: 64rem) {
+    nav.toc {
+      display: block;
+      position: sticky;
+      top: 2.5rem;
+      align-self: start;
+      font-size: 0.85rem;
+    }
+  }
+  nav.toc p { margin: 0 0 0.5rem; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); font-weight: 600; }
+  nav.toc a {
+    display: block;
+    padding: 0.3rem 0.6rem;
+    border-radius: 0.4rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+  nav.toc a:hover, nav.toc a:focus-visible { background: var(--accent); color: var(--foreground); outline: none; }
+
+  header.hero { margin-bottom: 2rem; }
+  .eyebrow { margin: 0; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); font-weight: 600; }
+  h1 { margin: 0.25rem 0 0.5rem; font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.02em; line-height: 1.2; }
+  h2 { margin: 0 0 1rem; font-size: 1.25rem; letter-spacing: -0.01em; }
+  h3 { margin: 1.5rem 0 0.6rem; font-size: 1rem; }
+  .lede { margin: 0; color: var(--muted-foreground); max-width: 48rem; }
+  .pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.15rem 0.65rem; font-size: 0.78rem; color: var(--muted-foreground);
+  }
+  .pill strong { color: var(--foreground); font-weight: 600; }
+
+  section { margin-bottom: 3rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    padding: 1.25rem;
+  }
+  .grid-2 { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 48rem) { .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .stack { display: flex; flex-direction: column; gap: 1rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); }
+  th, td { text-align: left; vertical-align: top; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border); }
+  th { font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted-foreground); background: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td.cost { white-space: nowrap; font-weight: 600; }
+  td:first-child { min-width: 14rem; }
+  table.compact td:first-child { min-width: 0; white-space: nowrap; font-weight: 600; }
+
+  .callout {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--destructive);
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem;
+    margin-top: 1rem;
+    background: var(--card);
+  }
+  .callout strong { color: var(--destructive); }
+
+  /* Architecture diagram */
+  .arch { display: grid; gap: 0.75rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 56rem) { .arch { grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; } }
+  .layer {
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 2px);
+    padding: 0.85rem 1rem;
+    background: var(--card);
+  }
+  .layer h4 { margin: 0 0 0.35rem; font-size: 0.9rem; }
+  .layer .tag { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); font-weight: 600; }
+  .layer ul { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--muted-foreground); }
+  .layer.primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+  .layer.primary .tag, .layer.primary ul { color: var(--primary-foreground); opacity: 0.8; }
+  .arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted-foreground); font-size: 0.75rem; text-align: center; padding: 0.25rem;
+  }
+  .arrow span { display: block; }
+  .arrow .glyph { font-size: 1.3rem; line-height: 1; }
+  @media (max-width: 55.99rem) { .arrow .glyph { transform: rotate(90deg); } }
+  .domain-bar {
+    margin-top: 0.75rem;
+    border: 1px dashed var(--ring);
+    border-radius: calc(var(--radius) + 2px);
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
+    color: var(--muted-foreground);
+  }
+  .domain-bar strong { color: var(--foreground); }
+
+  ul.clean { margin: 0; padding-left: 1.1rem; }
+  ul.clean li { margin: 0.3rem 0; }
+  ul.clean li::marker { color: var(--muted-foreground); }
+
+  /* Phases */
+  ol.phases { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+  ol.phases li {
+    display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); gap: 0.85rem;
+    border: 1px solid var(--border); border-radius: calc(var(--radius) + 2px); padding: 0.9rem 1rem; background: var(--card);
+  }
+  .num {
+    width: 2.25rem; height: 2.25rem; border-radius: 999px; display: grid; place-items: center;
+    background: var(--secondary); font-weight: 700; font-size: 0.9rem;
+  }
+  ol.phases h4 { margin: 0.2rem 0 0.2rem; font-size: 0.95rem; }
+  ol.phases p { margin: 0; color: var(--muted-foreground); font-size: 0.88rem; }
+
+  /* Decisions */
+  .decision { display: flex; flex-direction: column; gap: 0.75rem; }
+  .decision h3 { margin: 0; display: flex; gap: 0.6rem; align-items: baseline; }
+  .decision h3 .q { color: var(--muted-foreground); font-weight: 600; font-size: 0.85rem; }
+  .decision .context { margin: 0; color: var(--muted-foreground); font-size: 0.88rem; }
+  .options { display: grid; gap: 0.6rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 48rem) { .options { grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); } }
+  .option {
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 0.9rem; font-size: 0.86rem;
+  }
+  .option .label { font-weight: 600; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-bottom: 0.25rem; }
+  .option p { margin: 0; color: var(--muted-foreground); }
+  .option.rec { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .badge-rec {
+    font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700;
+    background: var(--primary); color: var(--primary-foreground); border-radius: 999px; padding: 0.05rem 0.5rem;
+  }
+
+  footer { color: var(--muted-foreground); font-size: 0.8rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <p>Contents</p>
+    <a href="#current">1. Current bottlenecks</a>
+    <a href="#architecture">2. Target architecture</a>
+    <a href="#api">3. Data-access interface</a>
+    <a href="#state">4. State management</a>
+    <a href="#rendering">5. Rendering + pagination</a>
+    <a href="#phases">6. Phases + waves</a>
+    <a href="#decisions">7. Decision log</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <p class="eyebrow">Bindecy · File Explorer</p>
+      <h1>Refactor plan: built for 10k+ nodes with lazy loading</h1>
+      <p class="lede">Move from "whole tree in memory, recursive render" to a mocked backend API that loads only what the current view needs, a normalized client store, and a virtualized flat ARIA tree.</p>
+      <div class="pills">
+        <span class="pill"><strong>Focus</strong> performance</span>
+        <span class="pill"><strong>Focus</strong> code structure</span>
+        <span class="pill"><strong>Adds</strong> CRUD (scope #4)</span>
+        <span class="pill"><strong>Adds</strong> scaling write-up (scope #6)</span>
+        <span class="pill"><strong>Status</strong> plan approved — see <code>tasks.md</code></span>
+      </div>
+    </header>
+
+    <!-- 1 -->
+    <section id="current">
+      <h2>1. What the current code does, and why it won't scale</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Where</th><th>What happens</th><th>Cost at 10k+ nodes</th></tr></thead>
+          <tbody>
+            <tr><td><code>project-overview.tsx:40</code><br /><code>filterProjectTree(projectFiles, filters)</code></td><td>Clones and filters the whole tree on every keystroke, with no debounce or deferral.</td><td class="cost">O(n) per keystroke</td></tr>
+            <tr><td><code>project-overview.tsx:26</code>, <code>file-tree.tsx:79</code><br /><code>countFiles(…)</code></td><td>Walks the whole tree on every render.</td><td class="cost">O(n) per render</td></tr>
+            <tr><td><code>tree-node.tsx:256</code><br /><code>countFiles(node.children)</code></td><td>Runs for every folder row.</td><td class="cost">O(n·depth) per render</td></tr>
+            <tr><td><code>tree-node.tsx:342</code> recursive <code>&lt;ul&gt;</code></td><td>Every expanded node stays mounted. There is no virtualization.</td><td class="cost">O(visible) DOM nodes</td></tr>
+            <tr><td><code>activeNodeId</code> / <code>selectedFileId</code> / <code>expandedFolderIds</code> passed down to every node</td><td>No memo; one arrow-key press or toggle re-renders the whole tree.</td><td class="cost">O(visible) per keypress</td></tr>
+            <tr><td><code>tree-node.tsx:41</code><br /><code>querySelectorAll('[role="treeitem"]')</code></td><td>Keyboard navigation reads the DOM.</td><td class="cost">Breaks once virtualized</td></tr>
+            <tr><td><code>findFileLocation</code> / <code>visibleFileIds</code></td><td>Need the whole tree loaded.</td><td class="cost">Not possible with lazy loading</td></tr>
+            <tr><td><code>react-router.config.ts</code> <code>ssr: true</code></td><td>The brief says "pure client-side React"; the mock data would also be generated on the server.</td><td class="cost">Brief mismatch</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout"><strong>Missing from the brief:</strong> CRUD (scope item 4) is not implemented at all, and there is no written scaling discussion (scope item 6).</div>
+    </section>
+
+    <!-- 2 -->
+    <section id="architecture">
+      <h2>2. Target architecture</h2>
+      <div class="arch" role="img" aria-label="Layer diagram: UI reads the store through selectors and sends intents to the loader; the loader calls FileExplorerApi and writes results into the store; the domain layer is shared by all layers.">
+        <div class="layer primary">
+          <div class="tag">ui/</div>
+          <h4>Components</h4>
+          <ul><li>Filter toolbar</li><li>Virtual tree + rows</li><li>Preview (per category)</li><li>CRUD dialogs</li></ul>
+        </div>
+        <div class="arrow"><div><span class="glyph">⇄</span><span>selectors ↓<br />intents ↑</span></div></div>
+        <div class="layer">
+          <div class="tag">state/</div>
+          <h4>Explorer store + loader</h4>
+          <ul><li>Normalized entities + listings</li><li>UI: expanded, selected, active, filters</li><li>Loader: dedupe, abort, paginate</li></ul>
+        </div>
+        <div class="arrow"><div><span class="glyph">→</span><span>async calls</span></div></div>
+        <div class="layer">
+          <div class="tag">api/</div>
+          <h4>FileExplorerApi</h4>
+          <ul><li>Interface + DTOs</li><li><code>mock/</code>: seeded in-memory DB, per-filter index, latency, abort, failure injection</li></ul>
+        </div>
+      </div>
+      <div class="domain-bar"><strong>domain/</strong> — types, filter parse/validate → <code>FileQuery</code> + stable <code>queryKey</code>, size formatting, sort order. Pure and shared by every layer; no React, no I/O.</div>
+
+      <h3>Folder layout</h3>
+<pre><code>app/features/file-explorer/
+  domain/   types.ts, filters.ts, format.ts, sort.ts
+  api/      file-explorer-api.ts            <span class="cm"># interface + DTOs</span>
+            mock/ generate-tree.ts          <span class="cm"># seeded generator</span>
+                  mock-db.ts                <span class="cm"># index + per-filter aggregates</span>
+                  mock-file-explorer-api.ts
+  state/    explorer-store.ts, loader.ts,
+            visible-rows.ts                 <span class="cm"># flatten</span>
+            api-context.tsx                 <span class="cm"># dependency injection</span>
+  ui/       file-explorer.tsx, filter-toolbar/,
+            tree/ (virtual-tree, tree-row, use-tree-keyboard),
+            preview/ (one component per category),
+            crud/ (create + delete dialogs)
+app/routes/home.tsx                         <span class="cm"># route shell only</span></code></pre>
+    </section>
+
+    <!-- 3 -->
+    <section id="api">
+      <h2>3. Data-access interface</h2>
+<pre><code><span class="kw">interface</span> FileExplorerApi {
+  listChildren(q: { folderId: string | null; query?: FileQuery; cursor?: string; limit: number },
+               signal?: AbortSignal): Promise&lt;Page&lt;NodeSummary&gt;&gt;
+  getNode(id: string, signal?: AbortSignal): Promise&lt;NodeDetail&gt;   <span class="cm">// path (ancestors) + previewUrl</span>
+  search(q: { query: FileQuery; cursor?: string; limit: number },
+         signal?: AbortSignal): Promise&lt;Page&lt;SearchHit&gt;&gt;           <span class="cm">// flat hits with ancestor ids</span>
+  getStats(q: { query?: FileQuery }, signal?: AbortSignal): Promise&lt;{ fileCount: number }&gt;
+  createFolder(i: { parentId: string | null; name: string }): Promise&lt;NodeSummary&gt;
+  createFile(i: { parentId: string | null; name: string; category: FileCategory;
+                  sizeInBytes: number; previewUrl: string }): Promise&lt;NodeSummary&gt;
+  deleteNode(id: string): Promise&lt;{ deletedIds: string[] }&gt;
+}
+<span class="kw">type</span> Page&lt;T&gt; = { items: T[]; nextCursor: string | null; total: number }</code></pre>
+
+      <div class="grid-2" style="margin-top:1rem">
+        <div class="card">
+          <h3 style="margin-top:0">Payload design</h3>
+          <ul class="clean">
+            <li><strong><code>NodeSummary</code></strong>: includes <code>parentId</code>. A folder carries <code>childCount</code>, <code>fileCount</code> (descendant files) and <code>matchCount</code> when a filter is active. The chevron and badges come from these fields, so the client never counts a subtree.</li>
+            <li><strong><code>getStats</code></strong>: feeds the header badge and "Showing X of Y files".</li>
+            <li><strong><code>previewUrl</code></strong>: only returned by <code>getNode</code>, which keeps list payloads small.</li>
+            <li><strong>Keyset cursor</strong> on <code>(type, name, id)</code>, not an offset. With offsets, items get skipped or repeated when a create or delete happens between pages.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Mock backend</h3>
+          <ul class="clean">
+            <li>Seeded generator with a configurable size (<code>?nodes=100000</code>).</li>
+            <li>The shape includes one folder with ~5k children (pagination) and one chain ~20 levels deep.</li>
+            <li><code>Map&lt;id, record&gt;</code> with pre-sorted <code>childIds</code>.</li>
+            <li>Each <code>queryKey</code> is evaluated once: one O(n) scan, then <code>matchCount</code> is pushed up to each ancestor, cached in an LRU cache like a server-side index.</li>
+            <li>Latency with jitter, <code>AbortSignal</code>, failure injection. URL config: <code>?seed=&amp;nodes=&amp;latency=&amp;failRate=&amp;failFirst=</code>. <code>failFirst=N</code> fails the first N <code>listChildren</code> calls, so Retry can be tested deterministically.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="state">
+      <h2>4. State management</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="margin-top:0">Normalized store (one per provider)</h3>
+<pre><code>nodesById
+listings[queryKey][folderId] =
+  { ids, nextCursor, status, error }
+expanded                <span class="cm">// browse mode</span>
+filterExpanded[queryKey] <span class="cm">// reset when filters change</span>
+selectedId, activeId, appliedQuery</code></pre>
+          <p style="color:var(--muted-foreground);font-size:.86rem;margin:.75rem 0 0">Zustand <code>createStore</code> + context, so tests stay isolated. Clearing filters brings the browse expansion state back unchanged, as the app does today.</p>
+        </div>
+        <div class="stack">
+          <div class="card">
+            <h3 style="margin-top:0">Loader</h3>
+            <ul class="clean">
+              <li>Deduplicates requests in flight per <code>(queryKey, folderId, cursor)</code>.</li>
+              <li>Cancels stale filter requests with <code>AbortController</code>.</li>
+              <li>Requests the next page when the "load more" row scrolls into view.</li>
+              <li>On filter apply: <code>search(limit 50)</code>, then expand the ancestors of those hits (D2).</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Filters</h3>
+            <ul class="clean">
+              <li>Typing stays in local string state in the toolbar.</li>
+              <li><code>useDebouncedCallback</code> from <code>use-debounce</code> (~250 ms) validates the draft, and only a valid <code>FileQuery</code> reaches <code>applyFilters</code>. Enter calls <code>flush()</code>; Reset calls <code>cancel()</code>.</li>
+              <li><strong>D3:</strong> inside <code>applyFilters</code>, a selected file that no longer matches (checked via its <code>parentId</code> chain and the shared <code>matchesFile</code>) is cleared in the same state update, and the change is announced. No effect.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <h3>CRUD cache updates</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Operation</th><th>Store change</th></tr></thead>
+          <tbody>
+            <tr><td>Create</td><td>Insert at the sorted position in the parent's loaded listing (if that position is beyond the loaded page, bump only <code>total</code>); bump the parent's and ancestors' counts.</td></tr>
+            <tr><td>Delete</td><td>Remove the subtree ids, drop their listings, and clear selection or expanded state that pointed inside the subtree.</td></tr>
+            <tr><td>Either, while filtering</td><td>Drop the filtered listings, since whether a node matches may have changed.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section id="rendering">
+      <h2>5. Rendering</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="margin-top:0">Flatten, then virtualize</h3>
+<pre><code>visibleRows = flatten(listings, expanded)
+  → Row = node | loading | load-more | error
+          { depth, posinset, setsize }
+
+&lt;VirtualTree&gt;   <span class="cm">// @tanstack/react-virtual, exact heights: folder 34 · file 50 · status 34 px</span>
+  ~40 mounted &lt;TreeRow&gt; regardless of tree size</code></pre>
+          <p style="color:var(--muted-foreground);font-size:.86rem;margin:.75rem 0 0">Memoized; the cost is O(visible rows), not O(n).</p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Accessibility + re-render scope</h3>
+          <ul class="clean">
+            <li>Flat <code>role="tree"</code> with <code>aria-level</code>, <code>aria-setsize</code>, <code>aria-posinset</code>, <code>aria-expanded</code>.</li>
+            <li>Focus stays on the tree container; <code>aria-activedescendant</code> points at the active row, so focus isn't lost when rows unmount.</li>
+            <li>Keyboard navigation works on <code>visibleRows</code> indexes and calls <code>scrollToIndex</code>, with no DOM queries.</li>
+            <li>Each <code>TreeRow</code> is <code>memo</code>'d and subscribes to its own <code>isExpanded</code> / <code>isSelected</code> / <code>isActive</code>, so toggling one row re-renders only that row.</li>
+            <li>The preview is keyed by id and fetches <code>getNode</code> only after a file is selected.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Pagination: append on scroll (D8)</h3>
+      <p style="color:var(--muted-foreground);font-size:.88rem;margin:0 0 .75rem">Each folder's children load in pages of ~100 with a keyset cursor. Most folders fit in one page and look exactly like today. Large folders end with one status row, drawn at the same indent and height as a folder row.</p>
+<pre><code>⌄ 📂 Launch campaign                                4,812
+│  ⌄ 📂 Film                                        4,806
+│  │  🎞 clip-0001.mp4                        [Video]
+│  │  …  rows 2–99 virtualized
+│  │  🎞 clip-0100.mp4                        [Video]
+│  │  ◌ Loading more…  100 of 4,806                         <span class="cm">← status row</span>
+⌄ 📂 Research                                         2
+│  ◌ Loading…                                               <span class="cm">← first load after expanding</span></code></pre>
+      <div class="table-wrap" style="margin-top:1rem">
+        <table>
+          <thead><tr><th>State</th><th>Row</th><th>Trigger</th></tr></thead>
+          <tbody>
+            <tr><td>First load</td><td><code>◌ Loading…</code></td><td>Folder expanded with no listing for the current filter; the row mounts</td></tr>
+            <tr><td>More pages</td><td><code>◌ Loading more… 100 of 4,806</code></td><td>Row enters the virtualizer range (overscan ~10) or becomes the active row</td></tr>
+            <tr><td>Error</td><td><code>⚠ Couldn't load Film · Retry</code></td><td>Request failed; Enter or click retries</td></tr>
+            <tr><td>Complete</td><td>no row</td><td><code>nextCursor === null</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section id="phases">
+      <h2>6. Phases + parallel waves</h2>
+      <ol class="phases">
+        <li><span class="num">0</span><div><h4>Harness</h4><p><code>ssr: false</code> (SPA mode) and baseline gates → Playwright (Chromium) with a smoke test → <code>ci.yml</code>.</p></div></li>
+        <li><span class="num">1</span><div><h4>Contracts &amp; domain</h4><p>One task installs every dependency; domain types and API contract; filters; format and sort; <code>ScrollArea</code> <code>viewportRef</code>; task-doc addendum.</p></div></li>
+        <li><span class="num">2</span><div><h4>Mock backend</h4><p>Seeded generator and curated fixture → DB core → query index and mutations (in parallel) → adapter with latency, abort, failures and URL config.</p></div></li>
+        <li><span class="num">3</span><div><h4>State</h4><p>Store core (incl. D3) → flatten, loader and CRUD mutations (in parallel) → provider and hooks.</p></div></li>
+        <li><span class="num">4</span><div><h4>UI</h4><p>Tree rows, keyboard model, preview port and toolbar port (in parallel) → virtual tree.</p></div></li>
+        <li><span class="num">5</span><div><h4>Cutover &amp; features</h4><p>Page cutover and old-code deletion → E2E tree, filters and preview, and CRUD create (in parallel) → CRUD delete.</p></div></li>
+        <li><span class="num">6</span><div><h4>Proof &amp; docs</h4><p>Performance at 1k/10k/100k → README and scaling write-up.</p></div></li>
+      </ol>
+      <div class="table-wrap" style="margin-top:1rem">
+        <table class="compact">
+          <thead><tr><th>Wave</th><th>Tasks (parallel worktrees)</th></tr></thead>
+          <tbody>
+            <tr><td>W0 · W1</td><td>T01 SPA mode → T02 Playwright</td></tr>
+            <tr><td>W2</td><td>T03 CI · T04 deps · T05 contract · T08 UI prep · T09 addendum</td></tr>
+            <tr><td>W3</td><td>T06 filters · T07 format/sort · T10 generator</td></tr>
+            <tr><td>W4</td><td>T11 mock DB · T15 store</td></tr>
+            <tr><td>W5</td><td>T12 query index · T13 mock mutations · T16 flatten · T17 loader · T18 state mutations</td></tr>
+            <tr><td>W6</td><td>T14 adapter · T21 keyboard model</td></tr>
+            <tr><td>W7</td><td>T19 provider</td></tr>
+            <tr><td>W8</td><td>T20 rows · T23 preview · T24 toolbar</td></tr>
+            <tr><td>W9 · W10</td><td>T22 virtual tree → T25 cutover</td></tr>
+            <tr><td>W11</td><td>T26 E2E tree · T27 E2E filters · T28 E2E preview · T29 CRUD create</td></tr>
+            <tr><td>W12 – W14</td><td>T30 CRUD delete → T31 perf proof → T32 README</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout" style="border-left-color:var(--ring)"><strong style="color:var(--foreground)">Details:</strong> <code>tasks.md</code> lists each task's status, dependencies, files to read and touch, acceptance criteria and gates. Only T01, T02 and T04 write <code>package.json</code> / <code>bun.lock</code>, and E2E runs take a per-worktree <code>E2E_PORT</code>.</div>
+    </section>
+
+    <!-- 7 -->
+    <section id="decisions">
+      <h2>7. Decision log</h2>
+      <div class="table-wrap">
+        <table class="compact">
+          <thead><tr><th>#</th><th>Decision</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>D1</td><td>Normalized Zustand store + hand-written loader; no TanStack Query</td><td><code>flatten</code> needs sync access to every listing; <code>useQueries</code> has no infinite support; CRUD touches counts across many responses</td></tr>
+            <tr><td>D2</td><td>Filtered tree, lazily loaded, with <code>matchCount</code>; auto-reveal the first ~50 hits</td><td>Keeps the brief's layout and scales</td></tr>
+            <tr><td>D3</td><td>Clear a selection that stops matching (current behavior)</td><td>Simple and deterministic; runs in the store action (no effect); the debounce absorbs keystroke noise</td></tr>
+            <tr><td>D4</td><td>Mock backend on the main thread</td><td>Keep the assignment simple; a Web Worker is a documented next step</td></tr>
+            <tr><td>D5</td><td><code>app/features/file-explorer/{domain,api,state,ui}</code></td><td>Layers visible in the folder structure</td></tr>
+            <tr><td>D6</td><td>Playwright (Chromium only) + <code>ci.yml</code> first</td><td>Real UI verification before refactoring</td></tr>
+            <tr><td>D7</td><td><code>ssr: false</code> in Phase 0</td><td>The brief requires client-only React; removes the E2E hydration race</td></tr>
+            <tr><td>D8</td><td>Pagination appends on scroll</td><td>Fits keyset cursors, which stay safe under create/delete</td></tr>
+            <tr><td>D9</td><td>Remove Expand all / Collapse all</td><td>Not required (<code>bindecy-task.md:37</code> asks for per-folder toggles); means one request per folder</td></tr>
+            <tr><td>D10</td><td><code>@tanstack/react-virtual</code></td><td>Stable v3, React 19, headless, exact row heights</td></tr>
+            <tr><td>D11</td><td><code>use-debounce</code>, not <code>usehooks-ts</code> or TanStack Pacer</td><td><code>usehooks-ts</code> has open bugs #656 and #639; Pacer is beta with three dependencies</td></tr>
+            <tr><td>D12</td><td>Dependencies installed in dedicated tasks only</td><td>No <code>bun.lock</code> conflicts between worktrees</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>Visual summary of <code>plan.md</code>; task breakdown in <code>tasks.md</code>. Source brief: <code>bindecy-task.md</code>.</footer>
+  </main>
+</div>
+</body>
+</html>
