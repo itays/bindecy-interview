@@ -139,7 +139,7 @@ flowchart TD
 | T14 | Mock API adapter + URL config | 2 | T12, T13 | W6 | todo |
 | T15 | Explorer store core (incl. D3) | 3 | T04, T06 | W4 | done |
 | T16 | Visible rows (flatten) | 3 | T15 | W5 | done |
-| T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | todo |
+| T17 | Loader (dedupe, abort, paging, reveal) | 3 | T15 | W5 | done |
 | T18 | State mutations (CRUD) | 3 | T15 | W5 | todo |
 | T19 | Explorer provider + hooks | 3 | T14, T17, T18 | W7 | todo |
 | T20 | Tree row components | 4 | T16, T19 | W8 | todo |
@@ -479,10 +479,10 @@ flowchart TD
 
 ### T17: Loader (dedupe, abort, paging, reveal)
 
-- **Status:** todo
+- **Status:** done
 - **Depends on:** T15
 - **Read first:** `api/file-explorer-api.ts`, `state/explorer-store.ts`.
-- **Touch:** `app/features/file-explorer/state/loader.ts`, `loader.test.ts`.
+- **Touch:** `app/features/file-explorer/state/loader.ts`, `loader.test.ts`; additively `state/explorer-store.ts`, `explorer-store.test.ts` (the `stats` field).
 - **Change:** `createLoader(api, store, { pageSize = 100 })` provides:
   - `ensureChildren(folderId)`, `loadMore(folderId)` and `retry(folderId)`. In-flight requests are deduped per `(queryKey, folderId, cursor)`.
   - `applyFilters(query | null)` aborts the previous query's controller, calls `store.applyFilters`, runs `search(limit 50)` and `revealFolders` on the hits' ancestors when active, and refreshes `stats`.
@@ -490,6 +490,13 @@ flowchart TD
 
   Responses whose `queryKey` is no longer current are ignored. `AbortError` is not reported as an error.
 - **Acceptance:** tests (with a fake API that records calls and resolves manually) cover two `ensureChildren` calls producing one request, a filter change aborting the previous requests with the stale result ignored, a `loadMore` cursor chain, a network error setting an error status, retry recovering, and the reveal expanding exactly the ancestors of the hits.
+- **Outcome:**
+  - The store gains `stats: ExplorerStats` (`{ total, filtered }`, both `null` at first) and `setStats(partial)`, which returns the same state when nothing changes. `applyFilters` resets `stats.filtered` to `null` when the key changes, so an old filtered count never shows under a new query.
+  - `createLoader(api, store, { pageSize = 100 })` returns `ensureChildren`, `loadMore`, `retry`, `applyFilters`, `loadStats` and `dispose`. Every method resolves when its store update is done and never rejects. Page requests are deduped per `(queryKey, folderKey, cursor)` while in flight. `ensureChildren` also re-sends an orphaned first page (a `loading` listing with no ids and no request behind it). `retry` re-sends the failed first page, or the failed next page from the kept `nextCursor`.
+  - Aborting (deviation): browse requests and the total count share one lifetime controller that only `dispose()` aborts. A filter change doesn't abort them, because browse listings survive filter changes and would otherwise stay `loading`. Each filtered key has its own controller, aborted with its in-flight entries when the key stops being applied. A response lands only if it is still the registered request for its slot, its key is still live, and a next page still continues the listing's cursor. So a late result from a superseded query, or from an earlier run of the same query (A→B→A), is dropped. A first page lands even if a mutation dropped its listing meanwhile, so a mounted loading row can't hang.
+  - Errors: an `AbortError` is never reported. An `ApiError` sets the listing error to its message, and any other failure sets `GENERIC_LOAD_ERROR`. `applyFilters` runs `search({ limit: 50 })` and `getStats({ query })` in parallel and reveals every ancestor id of the hits, deduped (O(hits × depth)). A failed search reveals nothing; a failed count keeps the last value. `loadStats()` loads the total, plus the filtered count while filtering.
+  - For T19: call `loadStats()` on mount and after each create or delete (T18 doesn't change `stats`), and `dispose()` on unmount.
+  - Gates: format, typecheck and 305 unit tests (15 files, after the rebase onto T16, T13 and T12) pass; `loader.test.ts` has 23 tests and `explorer-store.test.ts` has 27. React Doctor reports no issues.
 
 ### T18: State mutations (CRUD)
 
