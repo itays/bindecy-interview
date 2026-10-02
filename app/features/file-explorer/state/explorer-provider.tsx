@@ -87,7 +87,6 @@ function createVisibleRowsSelector(): (state: ExplorerState) => Row[] {
       last.inputs.nodesById !== state.nodesById ||
       last.inputs.listings !== state.listings ||
       last.inputs.expanded !== state.expanded ||
-      last.inputs.filterExpanded !== state.filterExpanded ||
       last.inputs.appliedQuery !== state.appliedQuery
     ) {
       last = { inputs: state, rows: flattenVisibleRows(state) }

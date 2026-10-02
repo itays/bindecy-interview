@@ -313,7 +313,7 @@ describe("resolveTreeKey other keys", () => {
 })
 
 describe("resolveTreeKey while filtering", () => {
-  it("treats a folder expanded only in browse mode as collapsed", () => {
+  it("keeps a folder expanded before filtering expanded", () => {
     const store = expand(browseStore(), "docs")
     const query = { ...EMPTY_QUERY, name: "read" }
     store.getState().applyFilters(query)
@@ -322,14 +322,6 @@ describe("resolveTreeKey while filtering", () => {
       .receivePage(queryKey(query), null, page([folder("docs", null, 2)]), {
         append: false,
       })
-
-    expect(press(store, "docs", "ArrowRight")).toEqual({
-      type: "toggle",
-      id: "docs",
-    })
-    expect(press(store, "docs", "ArrowLeft")).toBeNull()
-
-    store.getState().toggleExpanded("docs")
 
     expect(press(store, "docs", "ArrowLeft")).toEqual({
       type: "toggle",

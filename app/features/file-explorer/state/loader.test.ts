@@ -4,7 +4,6 @@ import { ApiError } from "~/features/file-explorer/api/file-explorer-api"
 import type {
   FileExplorerApi,
   ListChildrenRequest,
-  SearchRequest,
   StatsRequest,
 } from "~/features/file-explorer/api/file-explorer-api"
 import { EMPTY_QUERY, queryKey } from "~/features/file-explorer/domain/filters"
@@ -14,7 +13,6 @@ import type {
   FileSummary,
   NodeSummary,
   Page,
-  SearchHit,
 } from "~/features/file-explorer/domain/types"
 import { BROWSE_QUERY_KEY, createExplorerStore } from "./explorer-store"
 import type { ExplorerStoreApi } from "./explorer-store"
@@ -31,7 +29,6 @@ type Call<Request, Response> = {
 function createFakeApi() {
   const calls = {
     listChildren: [] as Call<ListChildrenRequest, Page<NodeSummary>>[],
-    search: [] as Call<SearchRequest, Page<SearchHit>>[],
     getStats: [] as Call<StatsRequest, { fileCount: number }>[],
   }
 
@@ -50,7 +47,7 @@ function createFakeApi() {
   const api: FileExplorerApi = {
     listChildren: (request, signal) =>
       record(calls.listChildren, request, signal),
-    search: (request, signal) => record(calls.search, request, signal),
+    search: unused,
     getStats: (request, signal) => record(calls.getStats, request, signal),
     getNode: unused,
     createFolder: unused,
@@ -107,15 +104,6 @@ function page(
   total = ids.length
 ): Page<NodeSummary> {
   return { items: ids.map((id) => file(id)), nextCursor, total }
-}
-
-function hits(ancestorIdsPerHit: string[][]): Page<SearchHit> {
-  const items = ancestorIdsPerHit.map((ancestorIds, index) => ({
-    ...file(`hit-${index}`, ancestorIds.at(-1) ?? null),
-    ancestorIds,
-  }))
-
-  return { items, nextCursor: null, total: items.length }
 }
 
 function listing(
@@ -339,22 +327,16 @@ describe("applyFilters", () => {
 
       void loader.applyFilters(next)
 
-      const previous = [
-        ...calls.listChildren,
-        nthCall(calls.search, 0),
-        nthCall(calls.getStats, 0),
-      ]
+      const previous = [...calls.listChildren, nthCall(calls.getStats, 0)]
       expect(previous.every((call) => call.signal?.aborted)).toBe(true)
 
       nthCall(calls.listChildren, 0).resolve(page(["a"]))
       nthCall(calls.listChildren, 1).reject(new ApiError("network", "Late."))
-      nthCall(calls.search, 0).resolve(hits([["a", "b"]]))
       nthCall(calls.getStats, 0).resolve({ fileCount: 4 })
       await Promise.all([applied, ...loads])
 
       const state = store.getState()
       expect(Object.keys(state.listings)).toEqual([])
-      expect(state.filterExpanded).toEqual({})
       expect(state.stats.filtered).toBeNull()
     }
   )
@@ -399,40 +381,23 @@ describe("applyFilters", () => {
     void loader.applyFilters(photosQuery)
     await loader.applyFilters({ ...photosQuery, name: "PHOTO " })
 
-    expect(calls.search).toHaveLength(1)
     expect(calls.getStats).toHaveLength(1)
-    expect(nthCall(calls.search, 0).signal?.aborted).toBe(false)
+    expect(nthCall(calls.getStats, 0).signal?.aborted).toBe(false)
   })
 
-  it("expands exactly the ancestors of the first 50 hits under the new key", async () => {
+  it("leaves the expanded folders unchanged and requests only the count", async () => {
     const { calls, loader, store } = setup()
-    store.getState().toggleExpanded("browse-open")
+    store.getState().toggleExpanded("f")
+    const expanded = store.getState().expanded
 
     const applied = loader.applyFilters(photosQuery)
-    nthCall(calls.search, 0).resolve(hits([["a", "b"], ["a", "c"], []]))
     nthCall(calls.getStats, 0).resolve({ fileCount: 3 })
     await applied
 
-    expect(nthCall(calls.search, 0).request).toEqual({
-      query: photosQuery,
-      limit: 50,
-    })
-    const state = store.getState()
-    expect(state.filterExpanded).toEqual({
-      [photosKey]: new Set(["a", "b", "c"]),
-    })
-    expect(state.expanded).toEqual(new Set(["browse-open"]))
-  })
-
-  it("reveals nothing when the search fails", async () => {
-    const { calls, loader, store } = setup()
-
-    const applied = loader.applyFilters(photosQuery)
-    nthCall(calls.search, 0).reject(new ApiError("network", "Offline."))
-    nthCall(calls.getStats, 0).resolve({ fileCount: 3 })
-    await applied
-
-    expect(store.getState().filterExpanded).toEqual({})
+    expect(calls.getStats.map((call) => call.request)).toEqual([
+      { query: photosQuery },
+    ])
+    expect(store.getState().expanded).toBe(expanded)
     expect(store.getState().stats.filtered).toBe(3)
   })
 })
@@ -506,7 +471,7 @@ describe("dispose", () => {
     await loader.ensureChildren("f")
 
     expect(
-      [...calls.listChildren, ...calls.search, ...calls.getStats].every(
+      [...calls.listChildren, ...calls.getStats].every(
         (call) => call.signal?.aborted
       )
     ).toBe(true)

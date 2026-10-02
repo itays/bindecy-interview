@@ -1,11 +1,6 @@
 import type { NodeSummary } from "~/features/file-explorer/domain/types"
 
-import {
-  currentQueryKey,
-  folderKey,
-  isFiltering,
-  statusRowKey,
-} from "./explorer-store"
+import { currentQueryKey, folderKey, statusRowKey } from "./explorer-store"
 import type { ExplorerState, Listing } from "./explorer-store"
 
 type RowBase = {
@@ -111,11 +106,8 @@ function statusRow(
  * @throws Error when a listed id has no `nodesById` entry (store invariant).
  */
 export function flattenVisibleRows(state: ExplorerState): Row[] {
-  const key = currentQueryKey(state)
-  const listings = state.listings[key]
-  const expanded = isFiltering(state)
-    ? state.filterExpanded[key]
-    : state.expanded
+  const listings = state.listings[currentQueryKey(state)]
+  const { expanded } = state
   const rows: Row[] = []
 
   // Recursion depth is bounded by the folder depth (~25).
@@ -138,7 +130,7 @@ export function flattenVisibleRows(state: ExplorerState): Row[] {
 
         if (
           requireNode(state.nodesById, id).type === "folder" &&
-          expanded?.has(id)
+          expanded.has(id)
         ) {
           visit(id, depth + 1)
         }

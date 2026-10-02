@@ -11,9 +11,6 @@ import type { ExplorerStoreApi } from "./explorer-store"
 /** Children per listing page (D8). */
 const DEFAULT_PAGE_SIZE = 100
 
-/** Search hits whose ancestors are auto-expanded when a query is applied (D2). */
-const REVEAL_HIT_LIMIT = 50
-
 /** Shown for failures that aren't an `ApiError` (which carries its own message). */
 export const GENERIC_LOAD_ERROR = "Couldn't load this folder."
 
@@ -22,7 +19,7 @@ export type LoaderOptions = {
 }
 
 /**
- * Fetches listings, search reveals and stats into the store. Every method
+ * Fetches listings and stats into the store. Every method
  * resolves once its store update is done and never rejects for API failures.
  */
 export type Loader = {
@@ -35,7 +32,7 @@ export type Loader = {
   /**
    * Applies a query (inactive = `null`); a no-op for the current key.
    * Aborts the previous filtered query's requests, then, for an active
-   * query, reveals the ancestors of its first hits and loads its count.
+   * query, loads its count. Never expands or collapses folders.
    */
   applyFilters: (query: FileQuery | null) => Promise<void>
   /** Loads the total file count and, while filtering, the filtered count. */
@@ -186,33 +183,6 @@ export function createLoader(
     return request
   }
 
-  /**
-   * Expands every ancestor of the query's first hits: O(hits × depth).
-   * A failed search reveals nothing.
-   */
-  async function reveal(query: FileQuery, key: string): Promise<void> {
-    try {
-      const hits = await api.search(
-        { query, limit: REVEAL_HIT_LIMIT },
-        signalFor(key)
-      )
-      const ancestorIds = new Set<string>()
-
-      for (const hit of hits.items) {
-        for (const id of hit.ancestorIds) {
-          ancestorIds.add(id)
-        }
-      }
-
-      // Covers `dispose`; `revealFolders` also ignores a superseded key.
-      if (isLive(key)) {
-        store.getState().revealFolders(key, [...ancestorIds])
-      }
-    } catch {
-      // Revealing is a convenience; the tree still loads lazily without it.
-    }
-  }
-
   /** A failed stats request leaves the previous count in place. */
   async function loadTotal(): Promise<void> {
     try {
@@ -295,10 +265,7 @@ export function createLoader(
       store.getState().applyFilters(applied)
 
       if (applied !== null) {
-        await Promise.all([
-          reveal(applied, key),
-          loadFilteredCount(applied, key),
-        ])
+        await loadFilteredCount(applied, key)
       }
     },
 

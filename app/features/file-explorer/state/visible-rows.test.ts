@@ -238,33 +238,26 @@ describe("flattenVisibleRows positions", () => {
 })
 
 describe("flattenVisibleRows query keys", () => {
-  it("ignores browse listings and expansion while filtering", () => {
+  it("keeps folders expanded across a filter and reads the filtered listings", () => {
     const store = browseStore()
-    store.getState().toggleExpanded("docs")
-    store.getState().applyFilters(photoQuery)
+    const { applyFilters, receivePage, toggleExpanded } = store.getState()
+    toggleExpanded("docs")
+    applyFilters(photoQuery)
 
     expect(summary(flattenVisibleRows(store.getState()))).toEqual(["[loading]"])
 
-    store
-      .getState()
-      .receivePage(PHOTO_KEY, null, page([folder("docs", null)]), {
-        append: false,
-      })
-
-    expect(summary(flattenVisibleRows(store.getState()))).toEqual(["docs"])
-  })
-
-  it("expands filtered folders from the filtered listings", () => {
-    const store = browseStore()
-    const { applyFilters, receivePage, toggleExpanded } = store.getState()
-    applyFilters(photoQuery)
     receivePage(PHOTO_KEY, null, page([folder("docs", null)]), {
       append: false,
     })
+
+    expect(summary(flattenVisibleRows(store.getState()))).toEqual([
+      "docs",
+      "  [loading]",
+    ])
+
     receivePage(PHOTO_KEY, "docs", page([file("photo", "docs")]), {
       append: false,
     })
-    toggleExpanded("docs")
 
     expect(summary(flattenVisibleRows(store.getState()))).toEqual([
       "docs",
@@ -286,12 +279,11 @@ describe("flattenVisibleRows query keys", () => {
     const store = browseStore()
     store.getState().toggleExpanded("docs")
     const before = flattenVisibleRows(store.getState())
-    const { applyFilters, receivePage, toggleExpanded } = store.getState()
+    const { applyFilters, receivePage } = store.getState()
     applyFilters(photoQuery)
     receivePage(PHOTO_KEY, null, page([folder("docs", null)]), {
       append: false,
     })
-    toggleExpanded("docs")
     applyFilters(null)
 
     expect(flattenVisibleRows(store.getState())).toEqual(before)

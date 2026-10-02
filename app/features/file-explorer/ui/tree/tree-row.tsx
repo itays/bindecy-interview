@@ -26,7 +26,6 @@ import {
   currentQueryKey,
   isFiltering,
 } from "~/features/file-explorer/state/explorer-store"
-import type { ExplorerState } from "~/features/file-explorer/state/explorer-store"
 import { ROW_HEIGHT } from "~/features/file-explorer/state/visible-rows"
 import type {
   ErrorRow,
@@ -56,14 +55,6 @@ type RowShellProps = TreeRowProps & {
   "aria-expanded"?: boolean
   "aria-selected"?: boolean
   children: ReactNode
-}
-
-function isExpandedIn(state: ExplorerState, id: string): boolean {
-  const expanded = isFiltering(state)
-    ? state.filterExpanded[currentQueryKey(state)]
-    : state.expanded
-
-  return expanded?.has(id) ?? false
 }
 
 /** One segment per ancestor level; stacked rows join them into continuous guides. */
@@ -128,7 +119,7 @@ function NodeTreeRow({ row, ...props }: TreeRowProps & { row: NodeRow }) {
 
     return {
       node,
-      isExpanded: node.type === "folder" && isExpandedIn(explorer, row.id),
+      isExpanded: node.type === "folder" && explorer.expanded.has(row.id),
       isSelected: explorer.selectedId === row.id,
       isActive: explorer.activeId === row.key,
       isFiltering: isFiltering(explorer),
@@ -258,9 +249,10 @@ function Spinner() {
 
 /**
  * Requests the folder's first page when the row enters the rendered range,
- * so a folder expanded by a click, a key or a filter reveal loads only once
- * it's scrolled to. The slot key survives a query change, so the query key
- * re-runs the request for the new query; the loader dedupes.
+ * so a folder expanded by a click or a key, or left open across a filter
+ * change, loads only once it's scrolled to. The slot key survives a query
+ * change, so the query key re-runs the request for the new query; the loader
+ * dedupes.
  */
 function LoadingTreeRow({ row, ...props }: TreeRowProps & { row: LoadingRow }) {
   const isActive = useIsActive(row.key)

@@ -6,7 +6,7 @@ import type {
 import { compareSortKeys, sortKey } from "~/features/file-explorer/domain/sort"
 import type { SortKey } from "~/features/file-explorer/domain/sort"
 import type { NodeSummary } from "~/features/file-explorer/domain/types"
-import { BROWSE_QUERY_KEY, currentQueryKey, folderKey } from "./explorer-store"
+import { BROWSE_QUERY_KEY, folderKey } from "./explorer-store"
 import type { ExplorerState, ExplorerStoreApi, Listing } from "./explorer-store"
 
 /** CRUD commands; each resolves with the API's result once the store reflects it. */
@@ -167,32 +167,13 @@ function without(set: Set<string>, ids: ReadonlySet<string>): Set<string> {
   return next ?? set
 }
 
-/** Expands `parentId` in the current mode's set. */
 function withParentExpanded(
   state: ExplorerState,
   parentId: string | null
 ): Partial<ExplorerState> {
-  if (parentId === null) {
-    return {}
-  }
-
-  if (state.appliedQuery === null) {
-    return state.expanded.has(parentId)
-      ? {}
-      : { expanded: new Set(state.expanded).add(parentId) }
-  }
-
-  const key = currentQueryKey(state)
-  const current = state.filterExpanded[key]
-
-  return current?.has(parentId)
+  return parentId === null || state.expanded.has(parentId)
     ? {}
-    : {
-        filterExpanded: {
-          ...state.filterExpanded,
-          [key]: new Set(current).add(parentId),
-        },
-      }
+    : { expanded: new Set(state.expanded).add(parentId) }
 }
 
 /**
@@ -271,21 +252,10 @@ function applyDelete(
     )
   }
 
-  let filterExpanded = state.filterExpanded
-
-  for (const [key, set] of Object.entries(state.filterExpanded)) {
-    const pruned = without(set, deleted)
-
-    if (pruned !== set) {
-      filterExpanded = { ...filterExpanded, [key]: pruned }
-    }
-  }
-
   return {
     nodesById,
     listings: browseOnly(state.listings, nextBrowse),
     expanded: without(state.expanded, deleted),
-    filterExpanded,
     selectedId:
       state.selectedId !== null && deleted.has(state.selectedId)
         ? null

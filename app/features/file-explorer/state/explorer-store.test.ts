@@ -253,7 +253,7 @@ describe("listing status", () => {
 })
 
 describe("toggleExpanded", () => {
-  it("expands and collapses in the browse set while unfiltered", () => {
+  it("expands and collapses a folder", () => {
     const store = createExplorerStore()
     const { toggleExpanded } = store.getState()
 
@@ -262,23 +262,6 @@ describe("toggleExpanded", () => {
 
     toggleExpanded("f")
     expect(store.getState().expanded).toEqual(new Set())
-  })
-
-  it("writes to the applied query's set while filtering", () => {
-    const store = createExplorerStore()
-    const { applyFilters, toggleExpanded } = store.getState()
-
-    applyFilters(photosQuery)
-    toggleExpanded("f")
-
-    const state = store.getState()
-    expect(state.expanded).toEqual(new Set())
-    expect(state.filterExpanded[queryKey(photosQuery)]).toEqual(new Set(["f"]))
-
-    toggleExpanded("f")
-    expect(store.getState().filterExpanded[queryKey(photosQuery)]).toEqual(
-      new Set()
-    )
   })
 
   it("replaces the set instead of mutating it", () => {
@@ -293,24 +276,27 @@ describe("toggleExpanded", () => {
 })
 
 describe("applyFilters", () => {
-  it("restores the browse expansion when filters are cleared", () => {
+  it("leaves the expanded set alone, and keeps toggles made while filtering", () => {
     const store = createExplorerStore()
     const { applyFilters, toggleExpanded } = store.getState()
 
     toggleExpanded("browse-open")
+    const browseExpanded = store.getState().expanded
     applyFilters(photosQuery)
+    expect(store.getState().expanded).toBe(browseExpanded)
+
     toggleExpanded("filter-open")
+    applyFilters(videoQuery)
     applyFilters(null)
 
     const state = store.getState()
-    expect(state.expanded).toEqual(new Set(["browse-open"]))
-    expect(state.filterExpanded).toEqual({})
+    expect(state.expanded).toEqual(new Set(["browse-open", "filter-open"]))
     expect(currentQueryKey(state)).toBe(BROWSE_QUERY_KEY)
   })
 
-  it("drops the previous query's expansion and listings when switching queries", () => {
+  it("drops the previous query's listings when switching queries", () => {
     const store = createExplorerStore()
-    const { applyFilters, receivePage, toggleExpanded } = store.getState()
+    const { applyFilters, receivePage } = store.getState()
     const photosKey = queryKey(photosQuery)
 
     receivePage(BROWSE_QUERY_KEY, null, page([folder("f", null)]), {
@@ -318,13 +304,11 @@ describe("applyFilters", () => {
     })
     const browseListings = store.getState().listings[BROWSE_QUERY_KEY]
     applyFilters(photosQuery)
-    toggleExpanded("f")
     receivePage(photosKey, null, page([folder("f", null)]), { append: false })
     applyFilters(videoQuery)
 
     const state = store.getState()
     expect(currentQueryKey(state)).toBe(queryKey(videoQuery))
-    expect(state.filterExpanded[photosKey]).toBeUndefined()
     expect(state.listings[photosKey]).toBeUndefined()
     expect(state.listings[BROWSE_QUERY_KEY]).toBe(browseListings)
   })
@@ -433,35 +417,6 @@ describe("applyFilters selection (D3)", () => {
 
     expect(store.getState().selectedId).toBe("clip")
     expect(store.getState().announcement).toBe("")
-  })
-})
-
-describe("revealFolders", () => {
-  it("expands folders under the applied query", () => {
-    const store = createExplorerStore()
-    const { applyFilters, revealFolders } = store.getState()
-
-    applyFilters(photosQuery)
-    revealFolders(queryKey(photosQuery), ["a", "b"])
-
-    expect(store.getState().filterExpanded[queryKey(photosQuery)]).toEqual(
-      new Set(["a", "b"])
-    )
-  })
-
-  it.each<[string, FileQuery | null]>([
-    ["a newer query", videoQuery],
-    ["cleared filters", null],
-  ])("ignores a late reveal after %s", (_, next) => {
-    const store = createExplorerStore()
-    const { applyFilters, revealFolders } = store.getState()
-
-    applyFilters(photosQuery)
-    applyFilters(next)
-    const before = store.getState()
-    revealFolders(queryKey(photosQuery), ["a"])
-
-    expect(store.getState()).toBe(before)
   })
 })
 

@@ -38,6 +38,9 @@ const SHOTS: Shot[] = [
       await expect(page.locator("form p")).toHaveText(
         /^Showing [\d,]+ of [\d,]+ files\.$/
       )
+      // Filters never open folders; drill down to the hit.
+      await expandFolder(page, "Research")
+      await expandFolder(page, "Customer interviews")
       await selectFile(page, "arden-interview.mp3")
     },
   },

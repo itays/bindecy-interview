@@ -14,16 +14,16 @@ A client-side React file explorer that browses, filters, previews and edits a 10
 | [`?failFirst=1`](https://file-explorer-task.pages.dev/?failFirst=1) | The first listing fails: the error row and Retry |
 
 1. Expand **Asset library**, scroll down to **Stock footage** (5,000 files), open it and keep scrolling: pages of 100 load as you reach the end.
-2. Type `wordmark` in the name filter: the counts update and Brand system › Logos › Archive opens by itself.
+2. Open **Brand system**, then type `wordmark` in the name filter: the counts update, Brand system stays open and the other folders stay as they were. Filters never open or close folders; the match counts lead down to Logos › Archive.
 3. Select a file: the preview renders the image, audio, video or PDF.
 4. Click **New folder** in the tree header: it goes into the active folder (or the active file's folder) in sorted position, active and in view.
 5. Press <kbd>Delete</kbd> (or the trash button) and confirm: the row goes and focus moves to its neighbour.
 
 ## Screenshots
 
-| Desktop: nested folders, an image previewed | Active name filter: matching paths open, counts follow | Mobile (390 px): one stacked column |
+| Desktop: nested folders, an image previewed | Active name filter: folders keep their open state, counts follow | Mobile (390 px): one stacked column |
 | --- | --- | --- |
-| ![Desktop layout with Launch campaign › Photography selects expanded and hero-dusk.jpg previewed](docs/images/explorer-desktop.png) | ![The name filter "interview" with its matching paths expanded and the "Showing X of Y files" status](docs/images/filter-active.png) | ![Mobile layout with the tree card stacked above the preview](docs/images/mobile.png) |
+| ![Desktop layout with Launch campaign › Photography selects expanded and hero-dusk.jpg previewed](docs/images/explorer-desktop.png) | ![The name filter "interview" with Research › Customer interviews opened and the "Showing X of Y files" status](docs/images/filter-active.png) | ![Mobile layout with the tree card stacked above the preview](docs/images/mobile.png) |
 
 ## Requirements coverage
 
@@ -37,7 +37,7 @@ A client-side React file explorer that browses, filters, previews and edits a 10
 | 6. Performance at scale | See [Scaling to 10k+](#scaling-to-10k) | [`ui/tree/virtual-tree.tsx`](app/features/file-explorer/ui/tree/virtual-tree.tsx) |
 | Addendum: large tree, never loaded whole | Only the top level loads on mount; a folder's children load when it's expanded | [`state/loader.ts`](app/features/file-explorer/state/loader.ts) |
 | Addendum: backend-like mocked API | `FileExplorerApi` (children, node, search, stats, create, delete) with keyset cursors, latency, aborts and injected failures, over a seeded in-memory DB | [`api/file-explorer-api.ts`](app/features/file-explorer/api/file-explorer-api.ts) |
-| Addendum: request only what the view needs | A page loads when its row scrolls into range, the preview fetches one node, a filter asks for its first 50 hits | [`state/loader.ts`](app/features/file-explorer/state/loader.ts) |
+| Addendum: request only what the view needs | A page loads when its row scrolls into range, the preview fetches one node, a filter asks only for its count and the listings of folders on screen | [`state/loader.ts`](app/features/file-explorer/state/loader.ts) |
 | Addendum: architecture, state, rendering, scaling | Layered feature folder, one store per provider, fixed-height virtual rows (see below) | [`state/explorer-store.ts`](app/features/file-explorer/state/explorer-store.ts) |
 
 ## Architecture
@@ -106,15 +106,10 @@ sequenceDiagram
   Loader->>Loader: abort the previous filter's requests
   Loader->>Store: applyFilters(query)
   Note over Store: D3: a selected file that stops matching is deselected and announced
-  par reveal
-    Loader->>API: search({ query, limit: 50 })
-    API-->>Loader: the first hits, with ancestorIds
-    Loader->>Store: revealFolders(ancestor ids)
-  and count
-    Loader->>API: getStats({ query })
-    Loader->>Store: setStats({ filtered })
-  end
-  Note over Store,API: revealed folders then load their filtered children, with matchCount
+  Note over Store: expanded is untouched: open folders stay open, closed ones stay closed
+  Loader->>API: getStats({ query })
+  Loader->>Store: setStats({ filtered })
+  Note over Store,API: visible open folders then load their filtered children, with matchCount
 ```
 
 </details>
@@ -145,7 +140,7 @@ sequenceDiagram
 
 ## State and data contract
 
-- **One vanilla Zustand store per `ExplorerProvider`** holds normalized `nodesById`, `listings[queryKey][folderId]` (ids, cursor, total, status), browse `expanded`, per-query `filterExpanded`, selection, the active row and counts. Actions are synchronous, so D3 and each CRUD update land in one `set`.
+- **One vanilla Zustand store per `ExplorerProvider`** holds normalized `nodesById`, `listings[queryKey][folderId]` (ids, cursor, total, status), one `expanded` set shared by browsing and every filter, selection, the active row and counts. Actions are synchronous, so D3 and each CRUD update land in one `set`.
 - **A hand-written loader owns the I/O:** it dedupes in-flight pages, gives each filter its own abort controller, retries, and drops responses whose query or folder is gone.
 - **Why not TanStack Query (D1):** the flat row list needs synchronous reads of every loaded listing, `useQueries` has no infinite queries, and CRUD edits counts and listings across many cached pages.
 
@@ -186,7 +181,7 @@ Next steps: a real search index, ETags and conditional requests, push invalidati
 
 - [`api/file-explorer-api.ts`](app/features/file-explorer/api/file-explorer-api.ts): the data contract (paging, cursors, errors).
 - [`state/explorer-store.ts`](app/features/file-explorer/state/explorer-store.ts): the state shape, listings per query, and applying filters with D3.
-- [`state/loader.ts`](app/features/file-explorer/state/loader.ts): dedupe, abort, paging, retry and the filter reveal.
+- [`state/loader.ts`](app/features/file-explorer/state/loader.ts): dedupe, abort, paging and retry.
 - [`api/mock/mock-query-index.ts`](app/features/file-explorer/api/mock/mock-query-index.ts): the backend side of filtering (one scan, match counts, LRU).
 - [`ui/tree/virtual-tree.tsx`](app/features/file-explorer/ui/tree/virtual-tree.tsx): the virtualizer, `aria-activedescendant` focus and keyboard dispatch.
 
@@ -237,7 +232,7 @@ Mock backend URL params (a missing or non-numeric value uses the default; out-of
 - The mock runs on the main thread (D4). At 100k nodes, building it takes about 120 ms on load and a new filter's first scan about 16 ms.
 - Previews load external URLs (w3.org, Unsplash, MDN), so they need the network; the E2E specs stub them.
 - E2E runs in Chromium only; CI runs the smoke spec, and the full suite runs locally.
-- A filter opens the paths of its first 50 hits; other matches are one expand away.
+- Filters never open folders: a match inside a closed folder is reached by following the match counts.
 
 ## Process
 

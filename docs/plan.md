@@ -34,7 +34,7 @@ Refactor the working single-page explorer (filters, recursive tree, preview) so 
 | # | Decision | Rationale |
 | --- | --- | --- |
 | D1 | **Tree data lives in one normalized Zustand store plus a hand-written loader.** No TanStack Query. | The flat row list needs synchronous access to every loaded listing, and `useQueries` has no infinite-query support. CRUD changes counts and listings across many cached responses. Page-boundary inserts are awkward in `pages[]`. The loader (dedupe, abort, pagination) is about 100 tested lines. |
-| D2 | **Filtering keeps the tree, loaded lazily.** The server returns only matching or match-containing children with a `matchCount`. The client auto-expands the ancestor paths of the first ~50 hits. | Keeps the brief's target layout and scales. |
+| D2 | **Filtering keeps the tree, loaded lazily.** The server returns only matching or match-containing children with a `matchCount`. Filters never open or close folders: one `expanded` set serves browsing and every filter, so each folder keeps its open state across filter changes, and a match inside a closed folder is reached through the counts. | Keeps the brief's target layout and scales. Auto-expanding the ancestors of the first ~50 hits (the original choice) opened 17–21 folders for a single file-type filter. |
 | D3 | **A selected file that stops matching the applied filters is cleared (current behavior).** | Simpler and deterministic. The check happens inside the store action that applies filters (no `useEffect`), using the shared `domain/` match function and the ancestor chain already in the store. Filters are debounced, so transient keystrokes don't clear the selection. A polite live region announces the change. |
 | D4 | **The mock backend runs on the main thread** with simulated async latency. | Keeps the assignment simple. A Web Worker is mentioned in the README as the next step. |
 | D5 | **Feature folder** `app/features/file-explorer/{domain,api,state,ui}`. | The layers are visible in the folder structure. |
@@ -79,7 +79,7 @@ app/features/file-explorer/
   state/
     explorer-store.ts        # normalized entities, listings per queryKey, UI state, applyFilters (D3)
     visible-rows.ts          # flatten(store) → Row[]
-    loader.ts                # loadChildren/loadMore/retry, dedupe, abort, auto-reveal via search
+    loader.ts                # loadChildren/loadMore/retry, dedupe, abort, filtered count
     mutations.ts             # create/delete → API → store updates
     explorer-provider.tsx    # DI: api + store + loader per provider; hooks
   ui/
@@ -153,8 +153,7 @@ The store is created per provider (Zustand `createStore` + React context), so te
 ```text
 nodesById: Map<id, NodeSummary>
 listings[queryKey][folderId | ROOT] = { ids, nextCursor, total, status: idle|loading|error, error }
-expanded: Set<id>                      # browse mode
-filterExpanded[queryKey]: Set<id>      # reveal + manual toggles while filtering; dropped when filters change
+expanded: Set<id>                      # shared by browsing and every filter; filters never change it
 appliedQuery: FileQuery | null         # null = unfiltered
 selectedId, activeId
 ```
@@ -162,7 +161,7 @@ selectedId, activeId
 - **Loader:**
   - Dedupes in-flight requests per `(queryKey, folderId, cursor)`.
   - Holds one `AbortController` per applied query, and aborts it when filters change.
-  - On `applyFilters` it calls `search(limit 50)` and marks the hits' ancestors as expanded under the new `queryKey`.
+  - On `applyFilters` it loads the filtered count; it never touches `expanded`.
   - Supports retry.
 - **Mutations:**
   - **Create:** insert at the sorted position in the parent's loaded listing. If that position lies beyond the last loaded page, bump only `total`; a later page returns the item. Also bump the parent's counts.
@@ -232,7 +231,7 @@ selectedId, activeId
 - **E2E (Playwright, Chromium):**
   - Smoke.
   - Tree: lazy load, pagination, virtualization DOM bound, keyboard, error and retry.
-  - Filters: counts, reveal, D3.
+  - Filters: counts, kept expansion, D3.
   - Preview for each category.
   - CRUD.
 
