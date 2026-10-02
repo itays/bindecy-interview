@@ -52,7 +52,7 @@ async function renderToolbar({ curatedOnly = false } = {}) {
     latency: 0,
     ...(curatedOnly && { nodes: CURATED_RECORDS.length }),
   })
-  const search = vi.spyOn(api, "search")
+  const getStats = vi.spyOn(api, "getStats")
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
   const result = renderWithExplorer(
     <>
@@ -62,13 +62,16 @@ async function renderToolbar({ curatedOnly = false } = {}) {
     { api }
   )
   await advance(0)
-  return { ...result, api, search, user }
+  return { ...result, api, getStats, user }
 }
 
-function searchedQueries(
-  search: MockInstance<FileExplorerApi["search"]>
+/** Queries applied so far: each applied filter requests its count once. */
+function appliedQueries(
+  getStats: MockInstance<FileExplorerApi["getStats"]>
 ): FileQuery[] {
-  return search.mock.calls.map(([request]) => request.query)
+  return getStats.mock.calls.flatMap(([request]) =>
+    request.query ? [request.query] : []
+  )
 }
 
 function statusLine() {
@@ -115,13 +118,13 @@ describe("FilterToolbar", () => {
   })
 
   it("applies rapid typing once, after the debounce, and announces the counts", async () => {
-    const { search, user } = await renderToolbar()
+    const { getStats, user } = await renderToolbar()
     const reference = createMockFileExplorerApi({ latency: 0 })
     const { fileCount: total } = await reference.getStats({})
 
     await user.type(screen.getByLabelText("Name"), "hero")
 
-    expect(search).not.toHaveBeenCalled()
+    expect(appliedQueries(getStats)).toEqual([])
     expect(screen.getByTestId("applied-query")).toHaveTextContent("none")
     expect(statusLine()).toHaveTextContent(
       `Showing all ${format(total)} files.`
@@ -129,11 +132,11 @@ describe("FilterToolbar", () => {
 
     await advance(250)
 
-    expect(searchedQueries(search)).toEqual([
+    expect(appliedQueries(getStats)).toEqual([
       { name: "hero", minBytes: null, maxBytes: null, categories: [] },
     ])
     const { fileCount: matches } = await reference.getStats({
-      query: searchedQueries(search)[0],
+      query: appliedQueries(getStats)[0],
     })
     expect(matches).toBeGreaterThan(0)
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -145,14 +148,14 @@ describe("FilterToolbar", () => {
   })
 
   it("never applies an invalid size range and shows the field errors", async () => {
-    const { search, user } = await renderToolbar({ curatedOnly: true })
+    const { getStats, user } = await renderToolbar({ curatedOnly: true })
     const maximumSize = screen.getByLabelText("Maximum size (MB)")
 
     await user.type(screen.getByLabelText("Minimum size (MB)"), "5")
     await user.type(maximumSize, "1")
     await advance(1000)
 
-    expect(search).not.toHaveBeenCalled()
+    expect(appliedQueries(getStats)).toEqual([])
     expect(statusLine()).toHaveTextContent(
       "Fix the size filters to update the file results."
     )
@@ -163,7 +166,7 @@ describe("FilterToolbar", () => {
     await user.keyboard("{Enter}")
     await advance(1000)
 
-    expect(search).not.toHaveBeenCalled()
+    expect(appliedQueries(getStats)).toEqual([])
     expect(screen.getByTestId("applied-query")).toHaveTextContent("none")
     expect(maximumSize).toHaveAttribute("aria-invalid", "true")
     expect(screen.getByRole("alert")).toHaveTextContent(
@@ -175,7 +178,7 @@ describe("FilterToolbar", () => {
   })
 
   it("shows a negative size error after leaving the field", async () => {
-    const { search, user } = await renderToolbar({ curatedOnly: true })
+    const { getStats, user } = await renderToolbar({ curatedOnly: true })
     const minimumSize = screen.getByLabelText("Minimum size (MB)")
 
     await user.type(minimumSize, "-1")
@@ -186,16 +189,16 @@ describe("FilterToolbar", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Size must be zero or greater."
     )
-    expect(search).not.toHaveBeenCalled()
+    expect(appliedQueries(getStats)).toEqual([])
   })
 
   it("applies at once on Enter without a second call after the debounce", async () => {
-    const { search, user } = await renderToolbar({ curatedOnly: true })
+    const { getStats, user } = await renderToolbar({ curatedOnly: true })
 
     await user.type(screen.getByLabelText("Name"), "not-in-this-project{Enter}")
     await advance(0)
 
-    expect(searchedQueries(search)).toHaveLength(1)
+    expect(appliedQueries(getStats)).toHaveLength(1)
     expect(screen.getByRole("status")).toHaveTextContent(
       "No matching files. Showing 0 of 10 files."
     )
@@ -203,18 +206,18 @@ describe("FilterToolbar", () => {
 
     await advance(1000)
 
-    expect(search).toHaveBeenCalledTimes(1)
+    expect(appliedQueries(getStats)).toHaveLength(1)
   })
 
   it("applies a file-type toggle at once", async () => {
-    const { search, user } = await renderToolbar({ curatedOnly: true })
+    const { getStats, user } = await renderToolbar({ curatedOnly: true })
     const audio = screen.getByRole("button", { name: "Audio files" })
 
     await user.click(audio)
     await advance(0)
 
     expect(audio).toHaveAttribute("aria-pressed", "true")
-    expect(searchedQueries(search)).toEqual([
+    expect(appliedQueries(getStats)).toEqual([
       { name: "", minBytes: null, maxBytes: null, categories: ["audio"] },
     ])
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -223,7 +226,7 @@ describe("FilterToolbar", () => {
   })
 
   it("resets at once and cancels the pending apply", async () => {
-    const { search, user } = await renderToolbar({ curatedOnly: true })
+    const { getStats, user } = await renderToolbar({ curatedOnly: true })
     const name = screen.getByLabelText("Name")
     const reset = screen.getByRole("button", { name: "Reset filters" })
 
@@ -235,7 +238,9 @@ describe("FilterToolbar", () => {
     await user.click(reset)
     await advance(1000)
 
-    expect(searchedQueries(search).map((query) => query.name)).toEqual(["hero"])
+    expect(appliedQueries(getStats).map((query) => query.name)).toEqual([
+      "hero",
+    ])
     expect(screen.getByTestId("applied-query")).toHaveTextContent("none")
     expect(name).toHaveValue("")
     expect(reset).toBeDisabled()
@@ -269,7 +274,7 @@ describe("FilterToolbar", () => {
   })
 
   it("drops the pending apply when it unmounts", async () => {
-    const { rerender, search, user, api } = await renderToolbar()
+    const { rerender, getStats, user, api } = await renderToolbar()
 
     await user.type(screen.getByLabelText("Name"), "hero")
     // Same provider instance, so its loader keeps working without the toolbar.
@@ -280,7 +285,7 @@ describe("FilterToolbar", () => {
     )
     await advance(1000)
 
-    expect(search).not.toHaveBeenCalled()
+    expect(appliedQueries(getStats)).toEqual([])
     expect(screen.getByTestId("applied-query")).toHaveTextContent("none")
   })
 })

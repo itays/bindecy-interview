@@ -58,7 +58,7 @@ function cardBadge(page: Page, title: string) {
     .locator('[data-slot="card-action"] [data-slot="badge"]')
 }
 
-test("typing a name updates the counts and reveals the matching ancestors", async ({
+test("typing a name updates the counts and leaves the folders collapsed", async ({
   page,
 }) => {
   const { pageErrors, tree, statusLine, statusRegion, nameInput, ...ui } =
@@ -74,23 +74,25 @@ test("typing a name updates the counts and reveals the matching ancestors", asyn
   await expect(ui.toolbarBadge).toHaveText("1 of 9,423 files")
   await expect(ui.treeBadge).toHaveText("1 matching file")
 
-  // Every ancestor of the hit is revealed; nothing else is listed.
-  for (const id of ["folder-brand", "folder-logos", "folder-archive"]) {
-    await expect(page.locator(`#tree-row-${id}`)).toHaveAttribute(
-      "aria-expanded",
-      "true"
-    )
-  }
-  await expect(tree.getByRole("treeitem")).toHaveCount(4)
-  await expect(
-    tree.getByRole("treeitem", { name: /^Brand system \(1 matching file\)/ })
-  ).toBeVisible()
+  // Nothing opens by itself; the counts lead down to the hit.
+  const brandFolder = tree.getByRole("treeitem", {
+    name: /^Brand system \(1 matching file\)/,
+  })
+  await expect(brandFolder).toHaveAttribute("aria-expanded", "false")
+  await expect(tree.getByRole("treeitem")).toHaveCount(1)
+
+  await brandFolder.click()
+  await tree
+    .getByRole("treeitem", { name: /^Logos \(1 matching file\)/ })
+    .click()
+  await tree
+    .getByRole("treeitem", { name: /^Archive \(1 matching file\)/ })
+    .click()
+
   await expect(
     tree.getByRole("treeitem", { name: /^wordmark-v2\.png/ })
   ).toBeVisible()
-  await expect(
-    tree.getByRole("treeitem", { name: /^Asset library/ })
-  ).toHaveCount(0)
+  await expect(tree.getByRole("treeitem")).toHaveCount(4)
 
   await nameInput.fill("zzz-no-such-file")
 
@@ -113,12 +115,25 @@ test("file-type toggles combine with each other and with the name", async ({
   const audio = page.getByRole("button", { name: "Audio files" })
   const image = page.getByRole("button", { name: "Image files" })
   const video = page.getByRole("button", { name: "Video files" })
+  const launchFolder = tree.getByRole("treeitem", { name: /^Launch campaign/ })
 
+  await launchFolder.click()
+  await expect(launchFolder).toHaveAttribute("aria-expanded", "true")
   await expect(audio).toHaveAttribute("aria-pressed", "false")
 
   await audio.click()
   await expect(audio).toHaveAttribute("aria-pressed", "true")
   await expect(statusLine).toHaveText("Showing 1,492 of 9,423 files.")
+
+  // The type filter keeps Launch campaign open and opens nothing else.
+  await expect(launchFolder).toHaveAttribute("aria-expanded", "true")
+  await expect(
+    tree.getByRole("treeitem", { name: /^Film \(1 matching file\)/ })
+  ).toHaveAttribute("aria-expanded", "false")
+  await expect(
+    tree.getByRole("treeitem", { name: /^Research \(1 matching file\)/ })
+  ).toHaveAttribute("aria-expanded", "false")
+  await expect(tree.getByRole("treeitem")).toHaveCount(4)
 
   // Toggles are a union: audio + image = 1,492 + 2,136.
   await image.click()
@@ -141,6 +156,10 @@ test("file-type toggles combine with each other and with the name", async ({
   await nameInput.fill("launch")
 
   await expect(statusLine).toHaveText("Showing 1 of 9,423 files.")
+  await expect(tree.getByRole("treeitem")).toHaveCount(2)
+
+  await tree.getByRole("treeitem", { name: /^Film/ }).click()
+
   await expect(
     tree.getByRole("treeitem", { name: /^launch-score\.mp3/ })
   ).toBeVisible()
@@ -213,7 +232,9 @@ test("an invalid size range shows the field error and leaves the tree unchanged"
   expect(pageErrors).toEqual([])
 })
 
-test("Reset restores the browse expansion", async ({ page }) => {
+test("filters keep the expanded folders, and Reset keeps changes made while filtering", async ({
+  page,
+}) => {
   const { pageErrors, tree, statusLine, nameInput, resetButton } =
     await openExplorer(page)
   const brandFolder = tree.getByRole("treeitem", { name: /^Brand system/ })
@@ -227,20 +248,26 @@ test("Reset restores the browse expansion", async ({ page }) => {
   await nameInput.fill("launch")
 
   await expect(statusLine).toHaveText("Showing 4 of 9,423 files.")
-  await expect(launchFolder).toHaveAttribute("aria-expanded", "true")
+  await expect(launchFolder).toHaveAttribute("aria-expanded", "false")
   await expect(brandFolder).toHaveCount(0)
   await expect(resetButton).toBeEnabled()
+
+  await launchFolder.click()
+  await expect(launchFolder).toHaveAttribute("aria-expanded", "true")
 
   await resetButton.click()
 
   await expect(statusLine).toHaveText("Showing all 9,423 files.")
   await expect(nameInput).toHaveValue("")
   await expect(brandFolder).toHaveAttribute("aria-expanded", "true")
-  await expect(launchFolder).toHaveAttribute("aria-expanded", "false")
+  await expect(launchFolder).toHaveAttribute("aria-expanded", "true")
   await expect(
     tree.getByRole("treeitem", { name: /^brand-guidelines\.pdf/ })
   ).toBeVisible()
-  await expect(tree.getByRole("treeitem")).toHaveCount(7)
+  await expect(
+    tree.getByRole("treeitem", { name: /^Photography selects/ })
+  ).toBeVisible()
+  await expect(tree.getByRole("treeitem")).toHaveCount(9)
   await expect(resetButton).toBeDisabled()
 
   expect(pageErrors).toEqual([])
@@ -344,28 +371,25 @@ test("typing applies after the 250 ms debounce and Enter applies at once", async
   await page.clock.runFor(1)
   await expect(statusLine).toHaveText("Showing 1 of 9,423 files.")
   await expect(statusRegion).toHaveText("Showing 1 of 9,423 files.")
-  await expect(
-    tree.getByRole("treeitem", { name: /^Brand system \(1 matching file\)/ })
-  ).toHaveAttribute("aria-expanded", "true")
-  await expect(
-    tree.getByRole("treeitem", { name: /^brand-guidelines\.pdf/ })
-  ).toBeVisible()
+  const brandFolder = tree.getByRole("treeitem", { name: /^Brand system/ })
+  await expect(brandFolder).toHaveAccessibleName(
+    /^Brand system \(1 matching file\)/
+  )
+  await expect(brandFolder).toHaveAttribute("aria-expanded", "false")
 
   await nameInput.fill("brand")
   // Still the previous query: the new draft waits for the debounce.
   await expect(statusLine).toHaveText("Showing 1 of 9,423 files.")
-  await expect(tree.getByRole("treeitem")).toHaveCount(2)
+  await expect(tree.getByRole("treeitem")).toHaveCount(1)
 
   await nameInput.press("Enter")
 
   await expect(statusLine).toHaveText("Showing 3 of 9,423 files.")
   await expect(statusRegion).toHaveText("Showing 3 of 9,423 files.")
-  await expect(
-    tree.getByRole("treeitem", { name: /^primary-mark\.png/ })
-  ).toBeVisible()
-  await expect(
-    tree.getByRole("treeitem", { name: /^wordmark-v2\.png/ })
-  ).toBeVisible()
+  await expect(brandFolder).toHaveAccessibleName(
+    /^Brand system \(3 matching files\)/
+  )
+  await expect(brandFolder).toHaveAttribute("aria-expanded", "false")
 
   expect(pageErrors).toEqual([])
 })

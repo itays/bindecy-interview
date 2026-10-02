@@ -323,16 +323,15 @@ describe("create", () => {
     })
   })
 
-  it("expands the parent in the applied query's set while filtering", async () => {
+  it("expands the parent while filtering", async () => {
     const store = createExplorerStore()
     load(store, null, [folder("docs", null)])
     store.getState().applyFilters(pngQuery)
 
     await create(store, file("file-new", "docs"))
 
-    const { expanded, filterExpanded, appliedQuery } = store.getState()
-    expect(filterExpanded[queryKey(pngQuery)]).toEqual(new Set(["docs"]))
-    expect(expanded.has("docs")).toBe(false)
+    const { expanded, appliedQuery } = store.getState()
+    expect(expanded).toEqual(new Set(["docs"]))
     expect(appliedQuery).toBe(pngQuery)
   })
 })
@@ -445,13 +444,10 @@ describe("deleteNode", () => {
   it("clears selection, active row and expanded entries inside the subtree", async () => {
     const store = createExplorerStore()
     loadArchive(store)
-    const { toggleExpanded, applyFilters, revealFolders, select, setActive } =
-      store.getState()
+    const { toggleExpanded, select, setActive } = store.getState()
     for (const id of ["projects", "docs", "archive", "old"]) {
       toggleExpanded(id)
     }
-    applyFilters(pngQuery)
-    revealFolders(queryKey(pngQuery), ["projects", "docs", "archive", "old"])
     select("scan.png")
     setActive("old")
 
@@ -459,9 +455,6 @@ describe("deleteNode", () => {
 
     const state = store.getState()
     expect(state.expanded).toEqual(new Set(["projects", "docs"]))
-    expect(state.filterExpanded[queryKey(pngQuery)]).toEqual(
-      new Set(["projects", "docs"])
-    )
     expect(state.selectedId).toBeNull()
     expect(state.activeId).toBeNull()
   })
@@ -495,7 +488,8 @@ describe("create and delete", () => {
       load(store, null, [folder("docs", null, { childCount: 1, fileCount: 1 })])
       load(store, "docs", [file("a.png", "docs")])
       const key = queryKey(pngQuery)
-      const { applyFilters, receivePage, revealFolders } = store.getState()
+      const { applyFilters, receivePage, toggleExpanded } = store.getState()
+      toggleExpanded("docs")
       applyFilters(pngQuery)
       receivePage(
         key,
@@ -507,14 +501,13 @@ describe("create and delete", () => {
         },
         { append: false }
       )
-      revealFolders(key, ["docs"])
 
       await mutate(store)
 
-      const { listings, filterExpanded, appliedQuery } = store.getState()
+      const { listings, expanded, appliedQuery } = store.getState()
       expect(Object.keys(listings)).toEqual([BROWSE_QUERY_KEY])
       expect(Object.keys(listings[BROWSE_QUERY_KEY])).toEqual([ROOT_ID, "docs"])
-      expect(filterExpanded[key]).toEqual(new Set(["docs"]))
+      expect(expanded).toEqual(new Set(["docs"]))
       expect(appliedQuery).toBe(pngQuery)
     }
   )

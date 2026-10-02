@@ -1,8 +1,4 @@
 import type { NodeSummary } from "~/features/file-explorer/domain/types"
-import {
-  currentQueryKey,
-  isFiltering,
-} from "~/features/file-explorer/state/explorer-store"
 import type { ExplorerState } from "~/features/file-explorer/state/explorer-store"
 import type { Row } from "~/features/file-explorer/state/visible-rows"
 
@@ -22,14 +18,6 @@ function requireNode(state: ExplorerState, id: string): NodeSummary {
   }
 
   return node
-}
-
-function isExpanded(state: ExplorerState, id: string): boolean {
-  const expanded = isFiltering(state)
-    ? state.filterExpanded[currentQueryKey(state)]
-    : state.expanded
-
-  return expanded?.has(id) ?? false
 }
 
 function moveTo(index: number, activeIndex: number): TreeKeyAction | null {
@@ -88,7 +76,7 @@ export function resolveTreeKey(
       if (row.kind !== "node") return null
       const node = requireNode(state, row.id)
       if (node.type !== "folder") return null
-      if (!isExpanded(state, row.id)) {
+      if (!state.expanded.has(row.id)) {
         return node.childCount > 0 ? { type: "toggle", id: row.id } : null
       }
       const next = rows[activeIndex + 1]
@@ -100,7 +88,7 @@ export function resolveTreeKey(
       if (
         row.kind === "node" &&
         requireNode(state, row.id).type === "folder" &&
-        isExpanded(state, row.id)
+        state.expanded.has(row.id)
       ) {
         return { type: "toggle", id: row.id }
       }

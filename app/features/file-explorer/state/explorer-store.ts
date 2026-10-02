@@ -46,10 +46,8 @@ export type ExplorerState = {
   nodesById: Map<string, NodeSummary>
   /** `listings[queryKey][folderKey(folderId)]`. */
   listings: Record<string, Record<string, Listing>>
-  /** Expanded folders in browse mode. */
+  /** Expanded folders, shared by browse and every filter; a filter never changes it. */
   expanded: Set<string>
-  /** Expanded folders per filtered query key; only the applied key is kept. */
-  filterExpanded: Record<string, Set<string>>
   /** `null` = unfiltered. Never an inactive query. */
   appliedQuery: FileQuery | null
   selectedId: string | null
@@ -78,15 +76,13 @@ export type ExplorerActions = {
     folderId: string | null,
     error: string
   ) => void
-  /** Toggles in the browse set, or in the applied query's set while filtering. */
   toggleExpanded: (id: string) => void
-  /** Expands `ids` under `queryKey`; ignored unless `queryKey` is the applied filtered key. */
-  revealFolders: (queryKey: string, ids: readonly string[]) => void
   select: (id: string | null) => void
   setActive: (id: string | null) => void
   /**
-   * Applies a query (an inactive one counts as `null`), drops the state of
+   * Applies a query (an inactive one counts as `null`), drops the listings of
    * other filtered keys and clears a selected file that no longer matches (D3).
+   * Leaves `expanded` alone.
    */
   applyFilters: (query: FileQuery | null) => void
   /** Merges loaded counts into `stats`. */
@@ -142,7 +138,7 @@ function withListing(
   }
 }
 
-function toggled(set: ReadonlySet<string> | undefined, id: string) {
+function toggled(set: ReadonlySet<string>, id: string) {
   const next = new Set(set)
 
   if (!next.delete(id)) {
@@ -192,7 +188,6 @@ export function createExplorerStore(): ExplorerStoreApi {
     nodesById: new Map(),
     listings: {},
     expanded: new Set(),
-    filterExpanded: {},
     appliedQuery: null,
     selectedId: null,
     activeId: null,
@@ -255,40 +250,7 @@ export function createExplorerStore(): ExplorerStoreApi {
       ),
 
     toggleExpanded: (id) =>
-      set((state) => {
-        if (state.appliedQuery === null) {
-          return { expanded: toggled(state.expanded, id) }
-        }
-
-        const key = queryKey(state.appliedQuery)
-
-        return {
-          filterExpanded: {
-            ...state.filterExpanded,
-            [key]: toggled(state.filterExpanded[key], id),
-          },
-        }
-      }),
-
-    revealFolders: (key, ids) =>
-      set((state) => {
-        const current = state.filterExpanded[key]
-
-        if (
-          state.appliedQuery === null ||
-          queryKey(state.appliedQuery) !== key ||
-          ids.every((id) => current?.has(id))
-        ) {
-          return state
-        }
-
-        return {
-          filterExpanded: {
-            ...state.filterExpanded,
-            [key]: new Set([...(current ?? []), ...ids]),
-          },
-        }
-      }),
+      set((state) => ({ expanded: toggled(state.expanded, id) })),
 
     select: (id) =>
       set((state) => (state.selectedId === id ? state : { selectedId: id })),
@@ -326,7 +288,6 @@ export function createExplorerStore(): ExplorerStoreApi {
         return {
           appliedQuery,
           listings,
-          filterExpanded: {},
           // The previous query's count must never show under the new one.
           stats: { ...state.stats, filtered: null },
           ...(stale && {
