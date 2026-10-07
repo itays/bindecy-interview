@@ -288,17 +288,23 @@ export function createMutations(
   api: FileExplorerApi,
   store: ExplorerStoreApi
 ): ExplorerMutations {
-  function created(node: NodeSummary) {
-    store.setState((state) => applyCreate(state, node))
+  function created(node: NodeSummary, action: "createFolder" | "createFile") {
+    store.setState((state) => applyCreate(state, node), undefined, action)
     return node
   }
 
   return {
-    createFolder: async (input) => created(await api.createFolder(input)),
-    createFile: async (input) => created(await api.createFile(input)),
+    createFolder: async (input) =>
+      created(await api.createFolder(input), "createFolder"),
+    createFile: async (input) =>
+      created(await api.createFile(input), "createFile"),
     deleteNode: async (id) => {
       const result = await api.deleteNode(id)
-      store.setState((state) => applyDelete(state, id, result.deletedIds))
+      store.setState(
+        (state) => applyDelete(state, id, result.deletedIds),
+        undefined,
+        "deleteNode"
+      )
       return result
     },
   }

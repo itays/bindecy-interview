@@ -1,5 +1,6 @@
+import { devtools } from "zustand/middleware"
 import { createStore } from "zustand/vanilla"
-import type { StoreApi } from "zustand/vanilla"
+import type { Mutate, StateCreator, StoreApi } from "zustand/vanilla"
 
 import {
   isQueryActive,
@@ -91,7 +92,11 @@ export type ExplorerActions = {
 
 export type ExplorerStore = ExplorerState & ExplorerActions
 
-export type ExplorerStoreApi = StoreApi<ExplorerStore>
+/** Its `setState` takes an action name that labels the update in Redux DevTools. */
+export type ExplorerStoreApi = Mutate<
+  StoreApi<ExplorerStore>,
+  [["zustand/devtools", never]]
+>
 
 /** Listing key of a folder; the API's `null` (top level) maps to `ROOT_ID`. */
 export function folderKey(folderId: string | null): string {
@@ -183,19 +188,22 @@ function staleSelection(
     : selected
 }
 
-export function createExplorerStore(): ExplorerStoreApi {
-  return createStore<ExplorerStore>()((set) => ({
-    nodesById: new Map(),
-    listings: {},
-    expanded: new Set(),
-    appliedQuery: null,
-    selectedId: null,
-    activeId: null,
-    announcement: "",
-    stats: { total: null, filtered: null },
+const initializeExplorer: StateCreator<
+  ExplorerStore,
+  [["zustand/devtools", never]]
+> = (set) => ({
+  nodesById: new Map(),
+  listings: {},
+  expanded: new Set(),
+  appliedQuery: null,
+  selectedId: null,
+  activeId: null,
+  announcement: "",
+  stats: { total: null, filtered: null },
 
-    receivePage: (key, folderId, page, { append }) =>
-      set((state) => {
+  receivePage: (key, folderId, page, { append }) =>
+    set(
+      (state) => {
         const nodesById = new Map(state.nodesById)
 
         for (const node of page.items) {
@@ -223,10 +231,14 @@ export function createExplorerStore(): ExplorerStoreApi {
           })),
           ...(takesActive ? { activeId: pageIds[0] } : null),
         }
-      }),
+      },
+      undefined,
+      "receivePage"
+    ),
 
-    setListingStatus: (key, folderId, status) =>
-      set((state) => {
+  setListingStatus: (key, folderId, status) =>
+    set(
+      (state) => {
         const listing = state.listings[key]?.[folderKey(folderId)]
 
         if (listing?.status === status) {
@@ -238,38 +250,61 @@ export function createExplorerStore(): ExplorerStoreApi {
           status,
           error: null,
         }))
-      }),
+      },
+      undefined,
+      "setListingStatus"
+    ),
 
-    setListingError: (key, folderId, error) =>
-      set((state) =>
+  setListingError: (key, folderId, error) =>
+    set(
+      (state) =>
         withListing(state, key, folderId, (current) => ({
           ...(current ?? EMPTY_LISTING),
           status: "error",
           error,
-        }))
-      ),
+        })),
+      undefined,
+      "setListingError"
+    ),
 
-    toggleExpanded: (id) =>
-      set((state) => ({ expanded: toggled(state.expanded, id) })),
+  toggleExpanded: (id) =>
+    set(
+      (state) => ({ expanded: toggled(state.expanded, id) }),
+      undefined,
+      "toggleExpanded"
+    ),
 
-    select: (id) =>
-      set((state) => (state.selectedId === id ? state : { selectedId: id })),
+  select: (id) =>
+    set(
+      (state) => (state.selectedId === id ? state : { selectedId: id }),
+      undefined,
+      "select"
+    ),
 
-    setActive: (id) =>
-      set((state) => (state.activeId === id ? state : { activeId: id })),
+  setActive: (id) =>
+    set(
+      (state) => (state.activeId === id ? state : { activeId: id }),
+      undefined,
+      "setActive"
+    ),
 
-    setStats: (stats) =>
-      set((state) => {
+  setStats: (stats) =>
+    set(
+      (state) => {
         const next = { ...state.stats, ...stats }
 
         return next.total === state.stats.total &&
           next.filtered === state.stats.filtered
           ? state
           : { stats: next }
-      }),
+      },
+      undefined,
+      "setStats"
+    ),
 
-    applyFilters: (query) =>
-      set((state) => {
+  applyFilters: (query) =>
+    set(
+      (state) => {
         const appliedQuery = query && isQueryActive(query) ? query : null
         const key =
           appliedQuery === null ? BROWSE_QUERY_KEY : queryKey(appliedQuery)
@@ -295,6 +330,26 @@ export function createExplorerStore(): ExplorerStoreApi {
             announcement: `${stale.name} doesn't match the filters and was deselected.`,
           }),
         }
-      }),
-  }))
+      },
+      undefined,
+      "applyFilters"
+    ),
+})
+
+export function createExplorerStore(): ExplorerStoreApi {
+  // A static branch, so production builds drop the middleware entirely.
+  if (import.meta.env.DEV) {
+    return createStore<ExplorerStore>()(
+      devtools(initializeExplorer, {
+        name: "Explorer",
+        // Show `nodesById` and `expanded` instead of `{}`.
+        serialize: { options: { map: true, set: true } },
+      })
+    )
+  }
+
+  // The vanilla `setState` ignores the action names.
+  return createStore<ExplorerStore>()(
+    initializeExplorer as StateCreator<ExplorerStore>
+  ) as ExplorerStoreApi
 }
