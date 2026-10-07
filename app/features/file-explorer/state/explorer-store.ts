@@ -1,5 +1,6 @@
+import { devtools } from "zustand/middleware"
 import { createStore } from "zustand/vanilla"
-import type { StoreApi } from "zustand/vanilla"
+import type { StateCreator, StoreApi } from "zustand/vanilla"
 
 import {
   isQueryActive,
@@ -183,118 +184,131 @@ function staleSelection(
     : selected
 }
 
-export function createExplorerStore(): ExplorerStoreApi {
-  return createStore<ExplorerStore>()((set) => ({
-    nodesById: new Map(),
-    listings: {},
-    expanded: new Set(),
-    appliedQuery: null,
-    selectedId: null,
-    activeId: null,
-    announcement: "",
-    stats: { total: null, filtered: null },
+const initializeExplorer: StateCreator<ExplorerStore> = (set) => ({
+  nodesById: new Map(),
+  listings: {},
+  expanded: new Set(),
+  appliedQuery: null,
+  selectedId: null,
+  activeId: null,
+  announcement: "",
+  stats: { total: null, filtered: null },
 
-    receivePage: (key, folderId, page, { append }) =>
-      set((state) => {
-        const nodesById = new Map(state.nodesById)
+  receivePage: (key, folderId, page, { append }) =>
+    set((state) => {
+      const nodesById = new Map(state.nodesById)
 
-        for (const node of page.items) {
-          nodesById.set(node.id, node)
-        }
+      for (const node of page.items) {
+        nodesById.set(node.id, node)
+      }
 
-        const pageIds = page.items.map((node) => node.id)
-        // An active status row of this listing (loading, load-more or error)
-        // hands the active row to the first item it was waiting for, which
-        // takes its place in the tree. Otherwise a complete listing leaves
-        // nothing active, and a pinned load-more row keeps loading pages.
-        const takesActive =
-          pageIds.length > 0 &&
-          key === currentQueryKey(state) &&
-          state.activeId === statusRowKey(folderId)
+      const pageIds = page.items.map((node) => node.id)
+      // An active status row of this listing (loading, load-more or error)
+      // hands the active row to the first item it was waiting for, which
+      // takes its place in the tree. Otherwise a complete listing leaves
+      // nothing active, and a pinned load-more row keeps loading pages.
+      const takesActive =
+        pageIds.length > 0 &&
+        key === currentQueryKey(state) &&
+        state.activeId === statusRowKey(folderId)
 
-        return {
-          nodesById,
-          ...withListing(state, key, folderId, (listing) => ({
-            ids: append && listing ? [...listing.ids, ...pageIds] : pageIds,
-            nextCursor: page.nextCursor,
-            total: page.total,
-            status: "idle",
-            error: null,
-          })),
-          ...(takesActive ? { activeId: pageIds[0] } : null),
-        }
-      }),
-
-    setListingStatus: (key, folderId, status) =>
-      set((state) => {
-        const listing = state.listings[key]?.[folderKey(folderId)]
-
-        if (listing?.status === status) {
-          return state
-        }
-
-        return withListing(state, key, folderId, (current) => ({
-          ...(current ?? EMPTY_LISTING),
-          status,
+      return {
+        nodesById,
+        ...withListing(state, key, folderId, (listing) => ({
+          ids: append && listing ? [...listing.ids, ...pageIds] : pageIds,
+          nextCursor: page.nextCursor,
+          total: page.total,
+          status: "idle",
           error: null,
-        }))
-      }),
+        })),
+        ...(takesActive ? { activeId: pageIds[0] } : null),
+      }
+    }),
 
-    setListingError: (key, folderId, error) =>
-      set((state) =>
-        withListing(state, key, folderId, (current) => ({
-          ...(current ?? EMPTY_LISTING),
-          status: "error",
-          error,
-        }))
-      ),
+  setListingStatus: (key, folderId, status) =>
+    set((state) => {
+      const listing = state.listings[key]?.[folderKey(folderId)]
 
-    toggleExpanded: (id) =>
-      set((state) => ({ expanded: toggled(state.expanded, id) })),
+      if (listing?.status === status) {
+        return state
+      }
 
-    select: (id) =>
-      set((state) => (state.selectedId === id ? state : { selectedId: id })),
+      return withListing(state, key, folderId, (current) => ({
+        ...(current ?? EMPTY_LISTING),
+        status,
+        error: null,
+      }))
+    }),
 
-    setActive: (id) =>
-      set((state) => (state.activeId === id ? state : { activeId: id })),
+  setListingError: (key, folderId, error) =>
+    set((state) =>
+      withListing(state, key, folderId, (current) => ({
+        ...(current ?? EMPTY_LISTING),
+        status: "error",
+        error,
+      }))
+    ),
 
-    setStats: (stats) =>
-      set((state) => {
-        const next = { ...state.stats, ...stats }
+  toggleExpanded: (id) =>
+    set((state) => ({ expanded: toggled(state.expanded, id) })),
 
-        return next.total === state.stats.total &&
-          next.filtered === state.stats.filtered
-          ? state
-          : { stats: next }
-      }),
+  select: (id) =>
+    set((state) => (state.selectedId === id ? state : { selectedId: id })),
 
-    applyFilters: (query) =>
-      set((state) => {
-        const appliedQuery = query && isQueryActive(query) ? query : null
-        const key =
-          appliedQuery === null ? BROWSE_QUERY_KEY : queryKey(appliedQuery)
+  setActive: (id) =>
+    set((state) => (state.activeId === id ? state : { activeId: id })),
 
-        if (key === currentQueryKey(state)) {
-          return state
-        }
+  setStats: (stats) =>
+    set((state) => {
+      const next = { ...state.stats, ...stats }
 
-        const stale = appliedQuery && staleSelection(state, appliedQuery)
-        const browseListings = state.listings[BROWSE_QUERY_KEY]
-        // Filtered listings carry their query's `matchCount`s; refetch them on return.
-        const listings: ExplorerState["listings"] = browseListings
-          ? { [BROWSE_QUERY_KEY]: browseListings }
-          : {}
+      return next.total === state.stats.total &&
+        next.filtered === state.stats.filtered
+        ? state
+        : { stats: next }
+    }),
 
-        return {
-          appliedQuery,
-          listings,
-          // The previous query's count must never show under the new one.
-          stats: { ...state.stats, filtered: null },
-          ...(stale && {
-            selectedId: null,
-            announcement: `${stale.name} doesn't match the filters and was deselected.`,
-          }),
-        }
-      }),
-  }))
+  applyFilters: (query) =>
+    set((state) => {
+      const appliedQuery = query && isQueryActive(query) ? query : null
+      const key =
+        appliedQuery === null ? BROWSE_QUERY_KEY : queryKey(appliedQuery)
+
+      if (key === currentQueryKey(state)) {
+        return state
+      }
+
+      const stale = appliedQuery && staleSelection(state, appliedQuery)
+      const browseListings = state.listings[BROWSE_QUERY_KEY]
+      // Filtered listings carry their query's `matchCount`s; refetch them on return.
+      const listings: ExplorerState["listings"] = browseListings
+        ? { [BROWSE_QUERY_KEY]: browseListings }
+        : {}
+
+      return {
+        appliedQuery,
+        listings,
+        // The previous query's count must never show under the new one.
+        stats: { ...state.stats, filtered: null },
+        ...(stale && {
+          selectedId: null,
+          announcement: `${stale.name} doesn't match the filters and was deselected.`,
+        }),
+      }
+    }),
+})
+
+export function createExplorerStore(): ExplorerStoreApi {
+  // A static branch, so production builds drop the middleware entirely.
+  if (import.meta.env.DEV) {
+    return createStore<ExplorerStore>()(
+      devtools(initializeExplorer, {
+        name: "Explorer",
+        // Show `nodesById` and `expanded` instead of `{}`.
+        serialize: { options: { map: true, set: true } },
+      })
+    )
+  }
+
+  return createStore<ExplorerStore>()(initializeExplorer)
 }
